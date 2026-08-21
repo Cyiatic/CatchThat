@@ -1,8 +1,8 @@
 <!--
-THESIS: Make a captured chat feel instantly readable while refusing the live-client illusion.
-OWN-WORLD: White and paper-gray reading surfaces, ink-blue text, a ghost-yellow identity stripe, compact ledger labels, and soft outlined message rows.
+THESIS: Make a captured chat feel like a familiar Snapchat Web conversation while refusing the live-client illusion.
+OWN-WORLD: Near-black conversation surfaces, white type, ghost-yellow identity signals, cyan/coral message rails, compact source labels, and evidence-forward archive controls.
 STORY: The reader knows which chat is open, what range was observed, who spoke, and which evidence survives; they can search, inspect, and print without sending anything.
-FIRST VIEWPORT: A yellow-topped CatchThat rail, a centered chat transcript, and a slim provenance panel establish local-only status, coverage, and the first readable rows immediately.
+FIRST VIEWPORT: A Snapchat-like dark chat rail, a bright readable transcript, and a provenance panel establish local-only status, partial coverage, and the first rows immediately.
 FORM: Operate/Read three-column archive reader; row selection is the signature interaction, with deep-linkable messages and a coverage ledger alongside the transcript.
 -->
 <!doctype html>
@@ -10,13 +10,16 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#fffc00">
+  <meta name="theme-color" content="#151617">
   <meta name="referrer" content="no-referrer">
   <title>{{ARCHIVE_TITLE}} · CatchThat</title>
   <style>
     :root {
       color-scheme: light;
       --yellow: #fffc00;
+      --chrome: #151617;
+      --cyan: #35c7ff;
+      --coral: #ff477e;
       --yellow-wash: #fffed0;
       --ink: #183248;
       --ink-soft: #385266;
@@ -306,9 +309,155 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
     }
+
+    /* Snapchat-inspired archive shell: familiar dark chrome, never a composer. */
+    :root {
+      color-scheme: dark;
+      --yellow: #fffc00;
+      --yellow-wash: #3f3b00;
+      --ink: #f5f5f5;
+      --ink-soft: #d8d9dd;
+      --muted: #b5b7bd;
+      --paper: #0f1011;
+      --surface: #242628;
+      --panel: #151617;
+      --panel-deep: #2d2f32;
+      --line: #35373b;
+      --line-strong: #4a4d53;
+      --teal: #7be0d3;
+      --teal-wash: #12302d;
+      --warn: #ffd66b;
+      --warn-wash: #2d291d;
+      --shadow: 0 18px 42px rgba(0, 0, 0, .24);
+    }
+
+    html, body { background: var(--paper); color: var(--ink); }
+    body { color-scheme: dark; }
+    button, a, select, input { touch-action: manipulation; }
+    .topbar { min-height: 64px; padding: 10px clamp(16px, 2.5vw, 34px); border-bottom-color: var(--line); background: var(--chrome, #151617); }
+    .brand { min-width: 216px; }
+    .brand-mark { width: 38px; height: 38px; border-color: var(--yellow); border-radius: 50%; background: var(--yellow); box-shadow: none; }
+    .brand-name { color: var(--ink); }
+    .brand-subtitle, .topbar-title .kicker { color: var(--muted); }
+    .topbar-title strong { color: var(--ink); }
+    .read-only-badge, .top-action { border-color: var(--line-strong); background: var(--surface); color: var(--ink-soft); }
+    .read-only-badge { font-weight: 700; }
+    .local-dot { background: var(--teal); box-shadow: 0 0 0 3px rgba(123, 224, 211, .14); }
+    .app-layout { grid-template-columns: 304px minmax(0, 1fr) 310px; min-height: calc(100vh - 64px); }
+    .left-rail, .provenance-panel { background: var(--panel); }
+    .left-rail { padding: 20px 16px; border-right-color: var(--line); }
+    .provenance-panel { padding: 21px 18px; border-left-color: var(--line); }
+    .archive-summary { border-bottom-color: var(--line); }
+    .rail-profile { display: flex; align-items: center; gap: 10px; min-height: 48px; margin-bottom: 18px; padding-bottom: 15px; border-bottom: 1px solid var(--line); }
+    .rail-avatar { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--yellow); color: #111; font-size: 11px; font-weight: 850; }
+    .rail-profile strong, .rail-profile span { display: block; }
+    .rail-profile strong { color: var(--ink); font-size: 13px; }
+    .rail-profile span { color: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+    .rail-profile .rail-menu { margin-left: auto; color: var(--muted); font-size: 12px; letter-spacing: 2px; }
+    .archive-kind { color: var(--yellow); }
+    .archive-title, .archive-stat strong, .panel-heading, .selected-message h3, .detail-section h3, .empty-state strong { color: var(--ink); }
+    .archive-stat, .detail-row, .filter-section h2, .kicker, .provenance-intro, .panel-note { color: var(--muted); }
+    .archive-stat strong, .detail-row dd { color: var(--ink-soft); }
+    .filter-section { padding-top: 18px; }
+    .filter-button { color: var(--ink-soft); }
+    .filter-button:hover { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
+    .filter-button[aria-pressed="true"] { border-color: var(--yellow); background: var(--yellow); color: #111; }
+    .filter-count { color: var(--muted); }
+    .filter-avatar { background: var(--panel-deep); }
+    .filter-initials, .archive-kind { color: var(--yellow); }
+    .filter-button[aria-pressed="true"] .filter-initials, .filter-button[aria-pressed="true"] .filter-count { color: #111; }
+    .rail-footer { border-top-color: var(--line); color: var(--muted); }
+    .rail-footer strong { color: var(--ink); }
+    .manifest-note { border-color: var(--line); background: var(--surface); }
+    .reader { background: var(--paper); padding-top: 24px; }
+    .reader-heading h1 { color: var(--ink); text-wrap: balance; }
+    .reader-subtitle { color: var(--muted); }
+    .select-control, .print-button, .window-button { border-color: var(--line-strong); background: var(--surface); color: var(--ink-soft); }
+    .select-control:focus, .search-input:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 252, 0, .16); }
+    .print-button { border-color: var(--yellow); background: var(--yellow); color: #111; }
+    .print-button:hover { background: #fff83a; }
+    .search-input { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
+    .search-input::placeholder, .search-icon, .search-hint, .result-count { color: var(--muted); }
+    .search-hint { border-color: var(--line); }
+    .coverage-banner { border-color: var(--line-strong); background: var(--warn-wash); box-shadow: none; }
+    .coverage-banner::before { background: var(--yellow); }
+    .coverage-banner.is-verified { background: var(--teal-wash); }
+    .coverage-banner.is-verified::before { background: var(--teal); }
+    .coverage-banner.is-unverified { background: var(--surface); }
+    .coverage-banner.is-unverified::before { background: var(--line-strong); }
+    .coverage-title { color: var(--ink); }
+    .coverage-copy { color: var(--ink-soft); }
+    .coverage-next { color: var(--warn); }
+    .is-verified .coverage-next { color: var(--teal); }
+    .transcript-frame { border-color: var(--line); background: var(--surface); box-shadow: var(--shadow); }
+    .transcript-heading, .window-controls { border-color: var(--line); background: var(--panel); }
+    .transcript-heading strong { color: var(--ink); }
+    .transcript-heading span, .window-status { color: var(--muted); }
+    .date-divider { color: var(--muted); }
+    .date-divider::after { background: var(--line); }
+    .message-row { border-bottom-color: var(--line); background: var(--surface); box-shadow: inset 3px 0 var(--cyan, #35c7ff); }
+    .message-row.speaker-coral { box-shadow: inset 3px 0 var(--coral, #ff477e); }
+    .message-row:hover { background: #2a2c2f; }
+    .message-row.is-selected, .message-row.speaker-coral.is-selected { background: var(--yellow-wash); box-shadow: inset 3px 0 var(--yellow); }
+    .message-avatar { border-radius: 50%; background: var(--panel-deep); }
+    .avatar-fallback { color: var(--cyan, #35c7ff); }
+    .message-author { color: var(--ink); }
+    .message-id { color: var(--muted); }
+    .message-content { color: var(--ink-soft); }
+    .message-content.is-empty { color: var(--muted); }
+    .message-content mark { color: #111; }
+    .message-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .message-time:hover { color: var(--yellow); }
+    .evidence-badge, .media-placeholder, .source-link { border-color: var(--line-strong); background: var(--panel); color: var(--ink-soft); }
+    .evidence-badge.saved { background: var(--teal-wash); color: var(--teal); }
+    .evidence-badge.retention { background: var(--warn-wash); color: var(--warn); }
+    .source-link { color: var(--cyan, #35c7ff); }
+    .window-button:hover:not(:disabled) { border-color: var(--yellow); color: var(--ink); }
+    .empty-state { color: var(--muted); }
+    .selected-message, .detail-section { border-color: var(--line); }
+    .detail-section h3 { color: var(--muted); }
+    .detail-row { grid-template-columns: 86px minmax(0, 1fr); }
+    .detail-row dd { min-width: 0; text-align: left; }
+    .detail-copy { border-color: var(--line); background: var(--surface); color: var(--ink-soft); }
+    .ledger-item { border-bottom-color: var(--line); }
+    .ledger-item strong { color: var(--ink); }
+    .ledger-item span { color: var(--muted); }
+    .message-time, .archive-stat, .detail-row, .window-status, .coverage-chip { font-variant-numeric: tabular-nums; }
+    :focus-visible { outline-color: var(--yellow); }
+    .skip-link { background: var(--yellow); color: #111; }
+    .skip-link { position: fixed; top: 8px; left: 8px; z-index: 10; padding: 8px 11px; border-radius: 6px; transform: translateY(-150%); transition: transform 120ms ease; }
+    .skip-link:focus { transform: translateY(0); }
+
+    @media print {
+      :root { color-scheme: light; --paper: #fff; --surface: #fff; --panel: #fff; --ink: #111; --ink-soft: #222; --muted: #555; --line: #c7c7c7; --line-strong: #999; --yellow-wash: #fffbd0; --teal-wash: #e2f2f0; --warn-wash: #fff8d9; }
+      body { background: #fff; color: #111; }
+      .message-row, .transcript-heading, .window-controls { background: #fff; box-shadow: none; }
+      .message-row { box-shadow: inset 3px 0 #777; }
+      .message-row.is-selected { box-shadow: inset 3px 0 #111; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+    @media (max-width: 1180px) {
+      .app-layout { grid-template-columns: 224px minmax(0, 1fr); }
+      .provenance-panel { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 22px; border-top: 1px solid var(--line); border-left: 0; }
+    }
+    @media (max-width: 760px) {
+      .app-layout { display: block; min-height: 0; }
+      .left-rail, .provenance-panel { display: none; border: 0; }
+      body.show-filters .left-rail, body.show-provenance .provenance-panel { display: block; }
+      .left-rail { padding: 18px; border-bottom: 1px solid var(--line); }
+      .provenance-panel { padding: 20px 18px; border-top: 1px solid var(--line); }
+      .reader { padding: 20px 13px 36px; }
+      .reader-header { display: block; }
+      .reader-tools { justify-content: flex-start; margin-top: 14px; }
+      .search-row { display: block; }
+      .result-count { display: block; margin-top: 7px; }
+    }
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to transcript</a>
   <div class="app-shell">
     <header class="topbar">
       <div class="brand" aria-label="CatchThat offline archive">
@@ -332,6 +481,11 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     <div class="app-layout">
       <aside class="left-rail" id="left-rail" aria-label="Archive filters">
         <section class="archive-summary">
+          <div class="rail-profile" aria-label="CatchThat local archive">
+            <div class="rail-avatar" aria-hidden="true">CT</div>
+            <div><strong>CatchThat</strong><span>Local archive</span></div>
+            <span class="rail-menu" aria-hidden="true">•••</span>
+          </div>
           <div class="archive-kind" id="archive-kind">Snapchat chat</div>
           <h2 class="archive-title" id="archive-title">Conversation</h2>
           <dl class="archive-stat-list">
@@ -372,7 +526,7 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
           <div class="search-wrap">
             <label class="sr-only" for="search-input">Search this archive</label>
             <span class="search-icon" aria-hidden="true">⌕</span>
-            <input class="search-input" id="search-input" type="search" placeholder="Search visible text, authors, or evidence" autocomplete="off">
+            <input class="search-input" id="search-input" name="q" type="search" placeholder="Search visible text, authors, or evidence" autocomplete="off">
             <span class="search-hint" aria-hidden="true">/</span>
           </div>
           <div class="result-count" id="result-count" role="status" aria-live="polite">0 messages</div>
@@ -389,8 +543,8 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
           <div class="window-controls">
             <div class="window-status" id="window-status">Showing 0</div>
             <div class="window-actions">
-              <button class="window-button" type="button" data-action="older">Load older rows</button>
-              <button class="window-button" type="button" data-action="newer">Load newer rows</button>
+              <button class="window-button" type="button" data-action="older">Show older captured rows</button>
+              <button class="window-button" type="button" data-action="newer">Show newer captured rows</button>
             </div>
           </div>
         </section>
@@ -425,6 +579,7 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     const metadata = archive.metadata || {};
     const messages = Array.isArray(archive.messages) ? [...archive.messages].sort((a, b) => String(a.timestamp || "").localeCompare(String(b.timestamp || "")) || String(a.id || "").localeCompare(String(b.id || ""))) : [];
     const participants = new Map((Array.isArray(archive.participants) ? archive.participants : []).map((participant) => [participant.id, participant]));
+    const participantOrder = new Map(Array.from(participants.keys()).map((id, index) => [id, index]));
     const coverage = metadata.coverage || (metadata.capture_range ? {
       status: "partial", complete: false, range_count: 1, unique_message_count: messages.length,
       start_confirmed: Boolean(metadata.capture_range.at_start), end_confirmed: Boolean(metadata.capture_range.at_end),
@@ -481,7 +636,7 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     };
     const renderAvatar = (participant, className) => {
       const path = safePath(participant?.avatar_path);
-      if (path) { const image = document.createElement("img"); image.className = className; image.src = path; image.alt = participant?.avatar_alt || `${displayName(participant?.id)} avatar`; image.loading = "lazy"; return image; }
+      if (path) { const image = document.createElement("img"); image.className = className; image.width = className.includes("filter") ? 24 : 40; image.height = className.includes("filter") ? 24 : 40; image.src = path; image.alt = participant?.avatar_alt || `${displayName(participant?.id)} avatar`; image.loading = "lazy"; return image; }
       return make("div", `${className} avatar-fallback`, initials(displayName(participant?.id)));
     };
     const filteredMessages = () => {
@@ -500,7 +655,7 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
         if (!media || typeof media !== "object") return;
         const path = safePath(media.path);
         const badge = make("span", "media-placeholder");
-        if (path && media.kind === "image") { const image = document.createElement("img"); image.src = path; image.alt = media.alt || media.label || "Captured image"; badge.appendChild(image); }
+        if (path && media.kind === "image") { const image = document.createElement("img"); image.width = 28; image.height = 20; image.src = path; image.alt = media.alt || media.label || "Captured image"; badge.appendChild(image); }
         const icon = make("span", "", media.kind === "image" ? "" : media.kind === "video" ? "▣" : media.kind === "audio" ? "◖" : "◌");
         if (icon.textContent) badge.appendChild(icon);
         badge.appendChild(document.createTextNode(`${media.label || media.kind || "Media"}${media.placeholder ? ` · ${media.placeholder}` : path ? " · local asset" : ""}`));
@@ -524,20 +679,22 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       header.append(title, chip); banner.appendChild(header);
       const copy = coverage.status === "verified" ? "The capture ranges overlap and both boundaries are marked, so the observed rendered range is linked." : "This is not the whole conversation. Only the messages rendered in the user-controlled capture range are present.";
       banner.appendChild(make("p", "coverage-copy", copy));
+      const action = metadata.capture_range?.scroll_action;
+      if (action?.requested) banner.appendChild(make("p", "coverage-step", `This run used one foreground ${action.requested} step and ${action.moved ? "moved the visible chat range" : "reached a scroll boundary without moving"}.`));
       if (coverage.next_action) banner.appendChild(make("p", "coverage-next", `Next action: ${coverage.next_action}`));
     };
     const renderFilters = () => {
       const list = clear(byId("author-filters"));
-      const all = make("button", "filter-button"); all.type = "button"; all.setAttribute("aria-pressed", state.author === "*"); all.append(make("span", "filter-avatar filter-initials", "ALL"), make("span", "", "All authors"), make("span", "filter-count", String(messages.length))); all.addEventListener("click", () => { state.author = "*"; state.windowStart = 0; render(); }); const allItem = make("li"); allItem.appendChild(all); list.appendChild(allItem);
+      const all = make("button", "filter-button"); all.type = "button"; all.setAttribute("aria-pressed", state.author === "*"); all.append(make("span", "filter-avatar filter-initials", "ALL"), make("span", "", "All authors"), make("span", "filter-count", String(messages.length))); all.addEventListener("click", () => { state.author = "*"; state.windowStart = 0; syncUrlState(); render(); }); const allItem = make("li"); allItem.appendChild(all); list.appendChild(allItem);
       participants.forEach((participant, id) => {
         const count = messages.filter((message) => message.author_id === id).length;
-        const button = make("button", "filter-button"); button.type = "button"; button.setAttribute("aria-pressed", state.author === id); button.append(renderAvatar(participant, "filter-avatar"), make("span", "", displayName(id)), make("span", "filter-count", String(count))); button.addEventListener("click", () => { state.author = id; state.windowStart = 0; render(); }); const item = make("li"); item.appendChild(button); list.appendChild(item);
+        const button = make("button", "filter-button"); button.type = "button"; button.setAttribute("aria-pressed", state.author === id); button.append(renderAvatar(participant, "filter-avatar"), make("span", "", displayName(id)), make("span", "filter-count", String(count))); button.addEventListener("click", () => { state.author = id; state.windowStart = 0; syncUrlState(); render(); }); const item = make("li"); item.appendChild(button); list.appendChild(item);
       });
     };
     const renderCaptureLedger = () => {
       const section = clear(byId("capture-ledger"));
       section.appendChild(make("h3", "", "Capture ledger"));
-      const ranges = Array.isArray(coverage.ranges) ? coverage.ranges : [];
+      const ranges = Array.isArray(coverage.ranges) && coverage.ranges.length ? coverage.ranges : metadata.capture_range ? [metadata.capture_range] : [];
       if (!ranges.length) { section.appendChild(make("p", "panel-note", "No overlap ledger was supplied with this archive.")); return; }
       const list = make("ol", "ledger-list");
       ranges.forEach((range, index) => {
@@ -545,6 +702,7 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
         item.appendChild(make("strong", "", `Range ${index + 1} · ${range.message_count || range.rendered_count || 0} rows`));
         item.appendChild(make("span", "", `${range.oldest_message_id || "—"} → ${range.newest_message_id || "—"}`));
         item.appendChild(make("span", "", `${range.at_start ? "oldest boundary" : "not at oldest"} · ${range.at_end ? "newest boundary" : "not at newest"} · overlap ${range.overlap_with_previous || 0}`));
+        if (range.scroll_action?.requested) item.appendChild(make("span", "", `foreground step · ${range.scroll_action.requested} · moved ${range.scroll_action.moved ? "yes" : "no"}`));
         list.appendChild(item);
       });
       section.appendChild(list);
@@ -567,7 +725,8 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     };
     const renderMessage = (message) => {
       const participant = participants.get(message.author_id) || { id: message.author_id, display_name: message.author_id };
-      const row = make("article", "message-row"); row.dataset.messageId = message.id; row.tabIndex = 0; row.setAttribute("aria-label", `${displayName(message.author_id)} message ${timeLabel(message.timestamp, state.timestampMode)}`); row.setAttribute("role", "listitem"); if (state.selected === message.id) row.classList.add("is-selected");
+      const speakerClass = (participantOrder.get(message.author_id) || 0) % 2 ? "speaker-coral" : "speaker-cyan";
+      const row = make("article", `message-row ${speakerClass}`); row.dataset.messageId = message.id; row.dataset.authorId = message.author_id || ""; row.tabIndex = 0; row.setAttribute("aria-label", `${displayName(message.author_id)} message ${timeLabel(message.timestamp, state.timestampMode)}`); row.setAttribute("role", "listitem"); if (state.selected === message.id) row.classList.add("is-selected");
       row.appendChild(renderAvatar(participant, "message-avatar"));
       const main = make("div", "message-main"); const byline = make("div", "message-byline"); byline.append(make("span", "message-author", displayName(message.author_id)), make("span", "message-id", `#${message.id}`)); main.appendChild(byline);
       const content = make("div", `message-content${message.content ? "" : " is-empty"}`); if (message.content) content.appendChild(contentSearchNode(message.content, state.query)); else content.textContent = message.media?.length ? "Media placeholder — no visible text" : "No visible text recorded"; main.appendChild(content);
@@ -594,19 +753,31 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     };
     const renderSelected = () => { renderProvenance(messages.find((message) => message.id === state.selected) || filteredMessages()[0] || null); };
     const render = () => { renderFilters(); renderMessages(); renderSelected(); };
-    const selectMessage = (id, updateHash = true) => {
-      const filtered = filteredMessages(); const index = filtered.findIndex((message) => message.id === id); if (index >= 0 && (index < state.windowStart || index >= state.windowStart + windowSize)) state.windowStart = Math.max(0, index - Math.floor(windowSize / 2)); state.selected = id; if (updateHash) history.replaceState(null, "", `#message=${encodeURIComponent(id)}`); render(); requestAnimationFrame(() => document.querySelector(`[data-message-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" }));
+    const syncUrlState = () => {
+      try {
+        const url = new URL(location.href);
+        url.searchParams.delete("q"); url.searchParams.delete("author"); url.searchParams.delete("time");
+        if (state.query) url.searchParams.set("q", state.query);
+        if (state.author !== "*") url.searchParams.set("author", state.author);
+        if (state.timestampMode === "utc") url.searchParams.set("time", "utc");
+        url.hash = state.selected ? `message=${encodeURIComponent(state.selected)}` : "";
+        history.replaceState(null, "", url.toString());
+      } catch { /* file viewers may not expose a mutable history URL */ }
     };
+    const selectMessage = (id, updateHash = true) => {
+      const filtered = filteredMessages(); const index = filtered.findIndex((message) => message.id === id); if (index >= 0 && (index < state.windowStart || index >= state.windowStart + windowSize)) state.windowStart = Math.max(0, index - Math.floor(windowSize / 2)); state.selected = id; if (updateHash) syncUrlState(); render(); requestAnimationFrame(() => document.querySelector(`[data-message-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" }));
+    };
+    const readUrlState = () => { const params = new URLSearchParams(location.search); state.query = params.get("q") || ""; const author = params.get("author"); state.author = author && participants.has(author) ? author : "*"; state.timestampMode = params.get("time") === "utc" ? "utc" : "local"; };
     const readHash = () => { const match = location.hash.match(/^#message=(.*)$/); if (!match) return; let id = ""; try { id = decodeURIComponent(match[1]); } catch { return; } if (messages.some((message) => message.id === id)) state.selected = id; };
     const wire = () => {
       text(byId("archive-kind"), String(metadata.kind || "snapchat_chat").replace(/_/g, " ")); text(byId("archive-title"), metadata.title || "Conversation"); text(byId("reader-title"), metadata.title || "Conversation"); text(byId("topbar-thread"), metadata.title || "Conversation"); text(byId("archive-message-count"), messages.length); text(byId("archive-captured-at"), formatCaptured(metadata.captured_at));
       const threadPath = metadata.thread_identity?.path || metadata.source?.url || "current chat"; text(byId("reader-subtitle"), `Read-only capture · ${threadPath} · ${metadata.display_timezone || "UTC"}`); text(byId("transcript-scope"), coverage.status === "verified" ? "Observed range chain" : "Rendered capture range");
-      byId("search-input").addEventListener("input", (event) => { state.query = event.target.value; state.windowStart = 0; render(); }); byId("timestamp-mode").addEventListener("change", (event) => { state.timestampMode = event.target.value; render(); });
+      byId("search-input").addEventListener("input", (event) => { state.query = event.target.value; state.windowStart = 0; syncUrlState(); render(); }); byId("timestamp-mode").addEventListener("change", (event) => { state.timestampMode = event.target.value; syncUrlState(); render(); });
       document.querySelector('[data-action="print"]').addEventListener("click", () => window.print()); document.querySelector('[data-action="older"]').addEventListener("click", () => { state.windowStart = Math.max(0, state.windowStart - windowSize); renderMessages(); renderSelected(); }); document.querySelector('[data-action="newer"]').addEventListener("click", () => { state.windowStart += windowSize; renderMessages(); renderSelected(); });
-      document.querySelector('[data-action="toggle-filters"]').addEventListener("click", (event) => { const show = !document.body.classList.toggle("show-filters"); event.currentTarget.setAttribute("aria-expanded", String(!show)); }); document.querySelector('[data-action="toggle-provenance"]').addEventListener("click", (event) => { const show = !document.body.classList.toggle("show-provenance"); event.currentTarget.setAttribute("aria-expanded", String(!show)); });
+      document.querySelector('[data-action="toggle-filters"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-filters"); event.currentTarget.setAttribute("aria-expanded", String(expanded)); }); document.querySelector('[data-action="toggle-provenance"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-provenance"); event.currentTarget.setAttribute("aria-expanded", String(expanded)); });
       document.addEventListener("keydown", (event) => { if (event.key === "/" && document.activeElement?.tagName !== "INPUT") { event.preventDefault(); byId("search-input").focus(); } });
-      window.addEventListener("hashchange", () => { readHash(); render(); });
-      renderCoverage(); renderCaptureLedger(); readHash(); state.selected = state.selected || messages[0]?.id || null; render();
+      window.addEventListener("hashchange", () => { readUrlState(); readHash(); render(); });
+      renderCoverage(); renderCaptureLedger(); readUrlState(); byId("search-input").value = state.query; byId("timestamp-mode").value = state.timestampMode; readHash(); state.selected = state.selected || messages[0]?.id || null; syncUrlState(); render();
     };
     wire();
   })();

@@ -34,7 +34,11 @@ service-independent.
 ## Operating Context
 
 - The source is Snapchat Web in the Codex in-app browser; the archive owner
-  opens the intended chat and controls scrolling/expansion.
+  opens the intended chat and starts each capture action in the foreground.
+- A capture run may perform exactly one bounded `older` or `newer` scroll step
+  when the user explicitly requests it. There is no unattended loop: the
+  visible status reports the requested direction, movement, range, and boundary
+  result after every run.
 - The web app may virtualize history, so captures are range-based and may be
   partial. The user can capture overlapping ranges and merge them later.
 - Real chat archives and raw captures are private data and stay under ignored
@@ -58,15 +62,20 @@ service-independent.
 - The adapter must not automate login or friend actions, inspect credentials or
   browser stores, call private APIs or network primitives, send messages,
   search arbitrary accounts, crawl, or evade notifications.
+- The adapter reads only the currently open chat's rendered DOM. A scroll step
+  moves the chat's visible message scroller by one viewport-sized increment and
+  captures that resulting rendered range; it never claims to load or verify
+  unseen history by itself.
 - A complete archive claim is out of scope unless the overlap chain and
   boundaries justify `verified`; a verified rendered-range chain still cannot
   prove unseen or deleted messages.
 
 ## Brand Commitments
 
-The name is CatchThat. The viewer is Snapchat-flavored but clearly an archive:
-light surfaces, a ghost-yellow identity accent, friendly readable rows, and
-visible local/read-only status. It must not pretend to be a live client.
+The name is CatchThat. The viewer borrows Snapchat Web's dark, high-contrast
+conversation shell, ghost-yellow identity accent, compact chat rail, and
+friendly readable rows while remaining unmistakably an archive. It must not
+pretend to be a live client or offer a send action.
 
 ## Evidence on Hand
 
@@ -92,7 +101,6 @@ smoke test.
 ## Accessibility & Inclusion
 
 The viewer uses semantic landmarks, keyboard-operable controls, visible focus,
-readable contrast against the yellow accent, text alternatives for avatars and
-media placeholders, reduced-motion support, responsive layout, and print
-styles. Color is never the only signal for coverage or message state.
-
+readable contrast against the dark shell and yellow accent, text alternatives
+for avatars and media placeholders, reduced-motion support, responsive layout,
+and print styles. Color is never the only signal for coverage or message state.

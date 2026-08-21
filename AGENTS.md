@@ -18,14 +18,16 @@ currently open Snapchat Web chat. It must never:
 - inspect cookies, localStorage, sessionStorage, tokens, passwords, or private
   APIs;
 - call `fetch`, XHR, WebSocket, background jobs, or remote media downloads;
-- crawl, scroll, expand, or discover chats without the user doing it; or
+  - crawl, expand, or discover chats without the user doing it; or
 - use stealth behavior to hide capture or evade notifications.
 
-The user controls which chat is open and controls scrolling/expansion. A
-capture records only visible message rows in that DOM window. It must preserve
-visible text, media placeholders, saved-state/retention indicators, source
-references, and capture provenance. It must never imply that a rendered range
-is the whole conversation.
+The user controls which chat is open and explicitly starts each capture action.
+An action may perform one bounded `older` or `newer` scroll step in the
+foreground, then records only visible message rows in the resulting DOM
+window. There is no unattended loop. It must preserve visible text, media
+placeholders, saved-state/retention indicators, source references, and capture
+provenance. It must never imply that a rendered range is the whole
+conversation.
 
 ## Development commands
 
@@ -77,8 +79,7 @@ The adapter intentionally uses conservative selector candidates because
 Snapchat Web DOM details can vary by release. If the live browser is logged
 out, use the synthetic fixture and run the commands above. The exact next
 smoke-test step is documented in `docs/live-smoke-test.md`: sign in manually in
-the in-app browser, open one intended chat yourself, scroll or expand it
-yourself, then run the read-only evaluate adapter once and inspect its selector
-notes before importing the result. Never enter credentials into CatchThat or
-the tool.
-
+the in-app browser, open one intended chat yourself, run the read-only evaluate
+adapter once, then use an explicit one-step `older` or `newer` invocation while
+inspecting its selector notes and boundary result before importing the range.
+Never enter credentials into CatchThat or the tool.

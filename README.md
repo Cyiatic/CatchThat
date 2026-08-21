@@ -12,9 +12,10 @@ edit or depend on that checkout.
 ## Safety boundary
 
 The browser adapter only reads message rows already rendered in the chat the
-user opened. The user controls scrolling and expansion. CatchThat never
-automates login or friend actions, searches arbitrary accounts, sends
-messages, inspects cookies/browser stores/tokens/passwords, calls private APIs,
+user opened. Each user-triggered run may perform one bounded `older` or `newer`
+scroll step; the user remains in control of every action and expansion.
+CatchThat never automates login or friend actions, searches arbitrary accounts,
+sends messages, inspects cookies/browser stores/tokens/passwords, calls private APIs,
 uses fetch/XHR/WebSocket, downloads media, crawls in the background, or hides
 capture behavior. Remote media is recorded as a reference or placeholder; it
 is never fetched by the project.
@@ -64,22 +65,25 @@ index, and absolute paths are omitted from the normalized archive.
 1. Open Snapchat Web in the Codex in-app browser and open the intended chat
    yourself. Do not ask CatchThat to log in, search for a friend, or navigate
    to a chat.
-2. Scroll or expand the chat yourself. Capture one visible DOM window at a
-   time, preferably with overlap between windows. The adapter does not scroll
-   or expand anything.
-3. Pass `tools/snapchat_visible_capture.js` to the in-app browser’s
-   read-only evaluate surface. It returns a JSON object; save that result as
-   `private-data\range-001.json`.
+2. Run `tools/snapchat_visible_capture.js` once with no options for the current
+   rendered range. For more history, run it again with exactly one explicit
+   `{scroll: "older"}` or `{scroll: "newer"}` option. Each invocation moves the
+   currently open message scroller by at most one bounded viewport step, then
+   captures the resulting visible DOM. It never schedules a follow-up step.
+3. Pass the adapter to the in-app browser’s read-only evaluate surface. It
+   returns a JSON object; save each result as `private-data\range-001.json`,
+   `range-002.json`, and so on.
 4. Review the returned `metadata.source.notes`, `metadata.thread_identity`,
    `metadata.capture_range`, `selector_notes`, and the message count before
    importing.
-5. Normalize and build the offline viewer. For more history, repeat steps 2–4
-   after the user moves the open chat, then merge the ranges.
+5. Normalize and build the offline viewer. Merge overlapping ranges after the
+   attended capture runs; do not treat one run as a complete conversation.
 
 The adapter records the sanitized current URL/path and thread heading, oldest
 and newest rendered message IDs/timestamps, rendered count, scroll metrics,
-boundary flags, capture time, selector notes, and source notes. It never
-claims a complete chat from one rendered window. See
+boundary flags, the requested scroll direction and movement, capture time,
+selector notes, and source notes. It never claims a complete chat from one
+rendered window. See
 `docs/live-smoke-test.md` for the exact next validation step and selector
 uncertainty.
 
@@ -157,4 +161,3 @@ The fixture, validator, importer, range merge/coverage verifier, attended
 capture adapter, test suite, and offline viewer are included. Live Snapchat
 selector certainty is intentionally pending one signed-in, user-opened chat;
 the project does not store live data in the repository.
-

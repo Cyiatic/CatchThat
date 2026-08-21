@@ -1,4 +1,4 @@
-async () => {
+async (options = {}) => {
   const clean = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
   const isHttp = (value) => /^https?:\/\//i.test(String(value ?? ""));
   const isSnapchatHost = /(^|\.)snapchat\.com$/i.test(String(location.hostname || ""));
@@ -45,6 +45,7 @@ async () => {
   };
   const sourceUrl = cleanPageUrl();
   if (!isSnapchatHost) throw new Error("Open the intended Snapchat Web chat before capturing.");
+  const requestedScroll = options && (options.scroll === "older" || options.scroll === "newer") ? options.scroll : null;
 
   const main = document.querySelector("main") || document.body;
   const timestampSelector = "time[datetime], [data-timestamp], [data-time]";
@@ -64,48 +65,118 @@ async () => {
     const timestamp = row.querySelector(timestampSelector);
     return Boolean((text || media) && timestamp);
   };
-  let usedSelector = null;
-  let candidateNodes = [];
-  const timestampAnchoredRows = Array.from(new Set(
-    Array.from(main.querySelectorAll(timestampSelector))
-      .filter((element) => isVisible(element))
-      .map((element) => rowFor(element))
-      .filter(Boolean),
-  )).filter(validRow);
-  if (timestampAnchoredRows.length) {
-    usedSelector = "visible timestamp-anchored rows";
-    candidateNodes = timestampAnchoredRows;
-  } else {
-    for (const selector of selectorCandidates) {
-      const found = Array.from(main.querySelectorAll(selector)).filter((element) => isVisible(element));
-      if (found.length) {
-        usedSelector = selector;
-        candidateNodes = found;
-        break;
+  const collectRows = () => {
+    let selector = null;
+    let candidateNodes = [];
+    const timestampAnchoredRows = Array.from(new Set(
+      Array.from(main.querySelectorAll(timestampSelector))
+        .filter((element) => isVisible(element))
+        .map((element) => rowFor(element))
+        .filter(Boolean),
+    )).filter(validRow);
+    if (timestampAnchoredRows.length) {
+      selector = "visible timestamp-anchored rows";
+      candidateNodes = timestampAnchoredRows;
+    } else {
+      for (const candidateSelector of selectorCandidates) {
+        const found = Array.from(main.querySelectorAll(candidateSelector)).filter((element) => isVisible(element));
+        if (found.length) {
+          selector = candidateSelector;
+          candidateNodes = found;
+          break;
+        }
       }
     }
-  }
-  if (!candidateNodes.length) throw new Error("No visible message rows were found in the currently open Snapchat Web chat.");
+    return {
+      usedSelector: selector,
+      rows: Array.from(new Set(candidateNodes.map(rowFor))).filter(validRow),
+    };
+  };
+  let { usedSelector, rows } = collectRows();
+  if (!rows.length) throw new Error("No visible message rows were found in the currently open Snapchat Web chat.");
 
-  const rows = Array.from(new Set(candidateNodes.map(rowFor))).filter(validRow);
-  if (!rows.length) throw new Error("Visible candidates were found, but none exposed both message evidence and a timestamp.");
-
-  let messageScroller = rows[0]?.parentElement || null;
-  while (messageScroller && messageScroller !== document.body) {
-    const style = getComputedStyle(messageScroller);
-    if (messageScroller.scrollHeight > messageScroller.clientHeight + 80 && /(auto|scroll)/i.test(style.overflowY)) break;
-    messageScroller = messageScroller.parentElement;
+  const scrollableAncestor = (row) => {
+    let element = row?.parentElement || null;
+    while (element && element !== document.body) {
+      const style = getComputedStyle(element);
+      if (element.scrollHeight > element.clientHeight + 80 && /(auto|scroll)/i.test(style.overflowY)) return element;
+      element = element.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  };
+  const scopeToConversationScroller = (candidateRows) => {
+    const groups = new Map();
+    candidateRows.forEach((row) => {
+      const scroller = scrollableAncestor(row);
+      const group = groups.get(scroller) || { scroller, rows: [] };
+      group.rows.push(row);
+      groups.set(scroller, group);
+    });
+    const ranked = Array.from(groups.values()).sort((left, right) => {
+      const leftRect = left.scroller?.getBoundingClientRect?.() || { x: 0 };
+      const rightRect = right.scroller?.getBoundingClientRect?.() || { x: 0 };
+      return Number(right.scroller?.clientWidth || 0) - Number(left.scroller?.clientWidth || 0)
+        || right.rows.length - left.rows.length
+        || Number(rightRect.x || 0) - Number(leftRect.x || 0);
+    });
+    const selected = ranked[0];
+    return {
+      scroller: selected?.scroller || document.scrollingElement || document.documentElement,
+      rows: selected?.rows || candidateRows,
+      group_count: ranked.length,
+    };
+  };
+  let scoped = scopeToConversationScroller(rows);
+  let messageScroller = scoped.scroller;
+  rows = scoped.rows;
+  let scrollTop = Number(messageScroller?.scrollTop || 0);
+  let scrollHeight = Number(messageScroller?.scrollHeight || 0);
+  let viewportHeight = Number(messageScroller?.clientHeight || 0);
+  const scrollAction = {
+    requested: requestedScroll,
+    moved: false,
+    step_pixels: 0,
+    from_scroll_top: scrollTop,
+    to_scroll_top: scrollTop,
+  };
+  if (requestedScroll) {
+    const stepPixels = Math.max(Math.round(Math.max(viewportHeight, 300) * 0.8), 240);
+    const maxScrollTop = Math.max(0, scrollHeight - viewportHeight);
+    const targetScrollTop = requestedScroll === "older"
+      ? Math.max(0, scrollTop - stepPixels)
+      : Math.min(maxScrollTop, scrollTop + stepPixels);
+    scrollAction.step_pixels = stepPixels;
+    if (messageScroller && targetScrollTop !== scrollTop) {
+      const delta = targetScrollTop - scrollTop;
+      if (typeof messageScroller.scrollTo === "function") {
+        messageScroller.scrollTo({ top: targetScrollTop, left: 0, behavior: "auto" });
+      } else if (typeof messageScroller.scrollBy === "function") {
+        messageScroller.scrollBy({ top: delta, left: 0, behavior: "auto" });
+      } else {
+        throw new Error("The visible message scroller exposes no read-only-safe scroll method.");
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 75);
+      });
+      scrollAction.moved = Number(messageScroller.scrollTop || 0) !== scrollTop;
+    }
+    scrollAction.to_scroll_top = Number(messageScroller?.scrollTop || targetScrollTop);
+    ({ usedSelector, rows } = collectRows());
+    scoped = scopeToConversationScroller(rows);
+    messageScroller = scoped.scroller;
+    rows = scoped.rows;
+    if (!rows.length) throw new Error("The requested scroll step completed, but no visible timestamped message rows remain.");
+    scrollTop = Number(messageScroller?.scrollTop || 0);
+    scrollHeight = Number(messageScroller?.scrollHeight || 0);
+    viewportHeight = Number(messageScroller?.clientHeight || 0);
   }
-  if (!messageScroller || messageScroller === document.body) messageScroller = document.scrollingElement || document.documentElement;
-  const scrollTop = Number(messageScroller?.scrollTop || 0);
-  const scrollHeight = Number(messageScroller?.scrollHeight || 0);
-  const viewportHeight = Number(messageScroller?.clientHeight || 0);
   const scrollPosition = {
     scroll_top: scrollTop,
     scroll_height: scrollHeight,
     viewport_height: viewportHeight,
     at_start: scrollTop <= 4,
     at_end: scrollTop + viewportHeight >= scrollHeight - 4,
+    scroll_action: scrollAction,
   };
 
   const participants = new Map();
@@ -114,7 +185,10 @@ async () => {
   const selectorNotes = [
     `Selected visible row candidate: ${usedSelector}.`,
     "Timestamp-anchored rows are preferred so visible conversation messages are not confused with the Snapchat sidebar list.",
-    "Rows were read from the current visible DOM only; no navigation or expansion was performed.",
+    `Selected the widest visible timestamped scroll container from ${scoped.group_count} candidate container(s) so the conversation pane is separated from the sidebar when both expose timestamps.`,
+    requestedScroll
+      ? `Applied one bounded ${requestedScroll} scroll step because the caller explicitly requested it; no follow-up scroll was scheduled.`
+      : "No scroll action was requested; rows were read from the current visible DOM without navigation or expansion.",
     "Rows without an ISO-8601 timestamp with timezone were skipped rather than assigned a date.",
     "Media URLs are references from visible elements; media bytes were not captured or downloaded.",
     "Selector certainty is provisional until one signed-in, user-opened chat is inspected.",
@@ -256,8 +330,10 @@ async () => {
         selector_notes: selectorNotes,
         notes: [
           "Captured from the user-opened Snapchat Web chat currently rendered in the foreground browser.",
-          "The user controlled the chat position and expansion; this adapter did not navigate, scroll, or expand.",
-          `Capture range: ${messages.length} rendered row(s), ${scrollPosition.at_start ? "at the oldest boundary" : "not at the oldest boundary"}, ${scrollPosition.at_end ? "at the newest boundary" : "not at the newest boundary"}.`,
+          requestedScroll
+            ? `The user explicitly triggered one foreground ${requestedScroll} scroll step; no follow-up scroll, navigation, or expansion was scheduled.`
+            : "No scroll action was requested; the adapter did not navigate, scroll, or expand the open chat.",
+          `Capture range: ${messages.length} rendered row(s), ${scrollPosition.at_start ? "at the oldest boundary" : "not at the oldest boundary"}, ${scrollPosition.at_end ? "at the newest boundary" : "not at the newest boundary"}; scroll moved: ${scrollAction.moved ? "yes" : "no"}.`,
           "Visible text, media placeholders, saved-state/retention indicators, and visible source references are preserved separately.",
           "This is a range capture, not a claim that the entire conversation is present.",
         ],
