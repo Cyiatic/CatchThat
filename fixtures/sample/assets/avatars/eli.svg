@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Eli synthetic avatar">
+  <rect width="96" height="96" rx="26" fill="#dff2f0"/>
+  <circle cx="48" cy="38" r="17" fill="#0b6b73"/>
+  <path d="M18 82c4-18 15-27 30-27s26 9 30 27" fill="#0b6b73"/>
+  <path d="M39 37h4M53 37h4" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+</svg>
+

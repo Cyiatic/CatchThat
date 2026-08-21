@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Mara synthetic avatar">
+  <rect width="96" height="96" rx="26" fill="#fffc00"/>
+  <circle cx="48" cy="38" r="17" fill="#183248"/>
+  <path d="M18 82c4-18 15-27 30-27s26 9 30 27" fill="#183248"/>
+  <circle cx="42" cy="36" r="3" fill="#fff"/>
+  <circle cx="54" cy="36" r="3" fill="#fff"/>
+</svg>
+
