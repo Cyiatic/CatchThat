@@ -171,6 +171,9 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("timestamp-anchored", capture_source)
         self.assertIn("main li", capture_source)
         self.assertIn("[dir='auto']", capture_source)
+        self.assertIn("headerAuthor", capture_source)
+        self.assertIn("headerElement || row", capture_source)
+        self.assertIn("detectedKind === \"unknown\"", capture_source)
         for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click("):
             self.assertNotIn(forbidden, capture_source)
 

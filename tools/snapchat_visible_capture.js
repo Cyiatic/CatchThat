@@ -133,8 +133,8 @@ async () => {
     const headerElement = row.querySelector("header");
     const timestampLabel = clean(timestampElement?.innerText || timestamp);
     const headerAuthor = clean(headerElement?.innerText).replace(timestampLabel, "").trim();
-    const avatarElement = Array.from(row.querySelectorAll("img[alt], img[src]")).find((element) => !/avatar|emoji|sticker/i.test(`${element.alt || ""} ${classes(element)}`));
-    const authorName = clean(authorElement?.innerText || authorElement?.getAttribute("aria-label") || avatarElement?.alt || headerAuthor) || "Unknown participant";
+    const avatarElement = Array.from((headerElement || row).querySelectorAll("img[alt], img[src]")).find((element) => !/avatar|emoji|sticker|thumbnail/i.test(`${element.alt || ""} ${classes(element)}`));
+    const authorName = clean(authorElement?.innerText || authorElement?.getAttribute("aria-label") || headerAuthor || avatarElement?.alt) || "Unknown participant";
     const authorId = authorElement?.getAttribute("data-author-id") || authorElement?.getAttribute("data-sender-id") || authorElement?.getAttribute("data-user-id") || avatarElement?.getAttribute("data-user-id") || `author-${slug(authorName) || participants.size + 1}`;
     const participant = participants.get(authorId) || { id: authorId, display_name: authorName, username: authorName };
     participant.display_name = authorName;
@@ -164,8 +164,9 @@ async () => {
       const key = `${element.tagName}:${label}:${reference || ""}`;
       if (mediaSeen.has(key)) continue;
       mediaSeen.add(key);
+      const detectedKind = mediaKind(reference);
       const item = {
-        kind: mediaKind(reference || element.tagName.toLowerCase()),
+        kind: detectedKind === "unknown" && element.tagName.toLowerCase() === "img" ? "image" : detectedKind,
         label: label || "Media",
         placeholder: "Media visible in source; bytes were not captured.",
       };
