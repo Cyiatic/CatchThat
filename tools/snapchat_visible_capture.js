@@ -47,33 +47,47 @@ async () => {
   if (!isSnapchatHost) throw new Error("Open the intended Snapchat Web chat before capturing.");
 
   const main = document.querySelector("main") || document.body;
+  const timestampSelector = "time[datetime], [data-timestamp], [data-time]";
   const selectorCandidates = [
     "[data-message-id]",
     "[data-testid*='message' i]",
     "[role='article']",
     "main [role='listitem']",
     "main [class*='message' i]",
+    "main li",
   ];
+  const rowFor = (candidate) => candidate.closest("[data-message-id], [role='article'], [role='listitem'], li") || candidate;
+  const validRow = (row) => {
+    if (!isVisible(row) || row.closest("nav, aside")) return false;
+    const text = clean(row.innerText || row.textContent);
+    const media = row.querySelector("img[src], video[src], audio[src], source[src]");
+    const timestamp = row.querySelector(timestampSelector);
+    return Boolean((text || media) && timestamp);
+  };
   let usedSelector = null;
   let candidateNodes = [];
-  for (const selector of selectorCandidates) {
-    const found = Array.from(main.querySelectorAll(selector)).filter((element) => isVisible(element));
-    if (found.length) {
-      usedSelector = selector;
-      candidateNodes = found;
-      break;
+  const timestampAnchoredRows = Array.from(new Set(
+    Array.from(main.querySelectorAll(timestampSelector))
+      .filter((element) => isVisible(element))
+      .map((element) => rowFor(element))
+      .filter(Boolean),
+  )).filter(validRow);
+  if (timestampAnchoredRows.length) {
+    usedSelector = "visible timestamp-anchored rows";
+    candidateNodes = timestampAnchoredRows;
+  } else {
+    for (const selector of selectorCandidates) {
+      const found = Array.from(main.querySelectorAll(selector)).filter((element) => isVisible(element));
+      if (found.length) {
+        usedSelector = selector;
+        candidateNodes = found;
+        break;
+      }
     }
   }
   if (!candidateNodes.length) throw new Error("No visible message rows were found in the currently open Snapchat Web chat.");
 
-  const rowFor = (candidate) => candidate.closest("[data-message-id], [role='article'], [role='listitem']") || candidate;
-  const rows = Array.from(new Set(candidateNodes.map(rowFor))).filter((row) => {
-    if (!isVisible(row) || row.closest("nav, aside")) return false;
-    const text = clean(row.innerText || row.textContent);
-    const media = row.querySelector("img[src], video[src], audio[src], source[src]");
-    const timestamp = row.querySelector("time[datetime], [data-timestamp], [data-time]");
-    return Boolean((text || media) && timestamp);
-  });
+  const rows = Array.from(new Set(candidateNodes.map(rowFor))).filter(validRow);
   if (!rows.length) throw new Error("Visible candidates were found, but none exposed both message evidence and a timestamp.");
 
   let messageScroller = rows[0]?.parentElement || null;
@@ -99,6 +113,7 @@ async () => {
   let skippedWithoutTimestamp = 0;
   const selectorNotes = [
     `Selected visible row candidate: ${usedSelector}.`,
+    "Timestamp-anchored rows are preferred so visible conversation messages are not confused with the Snapchat sidebar list.",
     "Rows were read from the current visible DOM only; no navigation or expansion was performed.",
     "Rows without an ISO-8601 timestamp with timezone were skipped rather than assigned a date.",
     "Media URLs are references from visible elements; media bytes were not captured or downloaded.",
@@ -107,7 +122,7 @@ async () => {
 
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
-    const timestampElement = row.querySelector("time[datetime], [data-timestamp], [data-time]");
+    const timestampElement = row.querySelector(timestampSelector);
     const timestamp = timestampElement?.getAttribute("datetime") || timestampElement?.getAttribute("data-timestamp") || timestampElement?.getAttribute("data-time");
     if (!isoWithTimezone(timestamp)) {
       skippedWithoutTimestamp += 1;
@@ -115,9 +130,12 @@ async () => {
     }
 
     const authorElement = row.querySelector("[data-author-id], [data-sender-id], [data-user-id], [data-testid*='author' i], [data-testid*='sender' i], [class*='author' i], [class*='sender' i], [class*='username' i]");
+    const headerElement = row.querySelector("header");
+    const timestampLabel = clean(timestampElement?.innerText || timestamp);
+    const headerAuthor = clean(headerElement?.innerText).replace(timestampLabel, "").trim();
     const avatarElement = Array.from(row.querySelectorAll("img[alt], img[src]")).find((element) => !/avatar|emoji|sticker/i.test(`${element.alt || ""} ${classes(element)}`));
-    const authorId = authorElement?.getAttribute("data-author-id") || authorElement?.getAttribute("data-sender-id") || authorElement?.getAttribute("data-user-id") || avatarElement?.getAttribute("data-user-id") || `author-${slug(authorElement?.innerText || authorElement?.getAttribute("aria-label") || avatarElement?.alt) || participants.size + 1}`;
-    const authorName = clean(authorElement?.innerText || authorElement?.getAttribute("aria-label") || avatarElement?.alt) || authorId;
+    const authorName = clean(authorElement?.innerText || authorElement?.getAttribute("aria-label") || avatarElement?.alt || headerAuthor) || "Unknown participant";
+    const authorId = authorElement?.getAttribute("data-author-id") || authorElement?.getAttribute("data-sender-id") || authorElement?.getAttribute("data-user-id") || avatarElement?.getAttribute("data-user-id") || `author-${slug(authorName) || participants.size + 1}`;
     const participant = participants.get(authorId) || { id: authorId, display_name: authorName, username: authorName };
     participant.display_name = authorName;
     participant.username = authorName;
@@ -125,7 +143,7 @@ async () => {
     if (isHttp(avatarRef)) participant.avatar_ref = avatarRef;
     participants.set(authorId, participant);
 
-    const contentElement = row.querySelector("[data-message-content], [data-testid*='content' i], [class*='messageText' i], [class*='content' i], p");
+    const contentElement = row.querySelector("[data-message-content], [data-testid*='content' i], [class*='messageText' i], [class*='content' i], [dir='auto'], p");
     let content = clean(contentElement?.innerText || contentElement?.textContent);
     if (!content) {
       content = clean(row.innerText || row.textContent);
@@ -196,7 +214,9 @@ async () => {
   const ordered = [...messages].sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)) || String(a.id).localeCompare(String(b.id)));
   const oldest = ordered[0];
   const newest = ordered[ordered.length - 1];
-  const headingElement = document.querySelector("main h1, main [role='heading'], h1");
+  const headingElement = Array.from(main.querySelectorAll("h1, h2, h3, [role='heading'], [aria-haspopup='listbox']"))
+    .filter((element) => isVisible(element) && !element.closest("nav, aside") && clean(element.innerText || element.getAttribute("aria-label")))
+    .sort((left, right) => left.getBoundingClientRect().top - right.getBoundingClientRect().top || clean(left.innerText).length - clean(right.innerText).length)[0];
   const heading = clean(headingElement?.innerText || document.title.replace(/^•\s*/, "")) || "Snapchat Web chat";
   const threadMatch = location.pathname.match(/(?:chat|conversation|thread|messages)[^/]*\/([^/]+)/i);
   const threadId = threadMatch?.[1] || null;

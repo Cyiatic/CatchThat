@@ -168,6 +168,9 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("selector_notes", capture_source)
         self.assertIn("scroll_height", capture_source)
         self.assertIn("visible DOM", capture_source)
+        self.assertIn("timestamp-anchored", capture_source)
+        self.assertIn("main li", capture_source)
+        self.assertIn("[dir='auto']", capture_source)
         for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click("):
             self.assertNotIn(forbidden, capture_source)
 

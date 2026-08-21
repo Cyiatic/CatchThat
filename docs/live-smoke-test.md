@@ -1,8 +1,8 @@
 # Live selector smoke test
 
 The live adapter is intentionally conservative because Snapchat Web’s DOM is
-not a stable public API and no signed-in chat was available during the initial
-build. This is the exact next step once the user has a suitable browser state:
+not a stable public API. A signed-in Rick Bailer chat was smoke-tested in the
+Codex in-app browser; use the same procedure for each new Snapchat Web layout:
 
 1. In the Codex in-app browser, sign in manually if needed. Never provide
    credentials to CatchThat or to the tool.
@@ -20,21 +20,31 @@ build. This is the exact next step once the user has a suitable browser state:
 6. Save the returned object under `private-data\range-001.json`, run
    `python -m catchthat import-capture ...`, and validate/build it.
 
-The adapter currently tries message-row candidates in this order:
+The adapter currently prefers message-row candidates in this order:
 
-1. `[data-message-id]`
-2. `[data-testid*="message" i]`
-3. `[role="article"]`
-4. `main [role="listitem"]`
-5. `main [class*="message" i]`
+1. visible rows anchored to `time[datetime]`, `data-timestamp`, or `data-time`
+2. `[data-message-id]`
+3. `[data-testid*="message" i]`
+4. `[role="article"]`
+5. `main [role="listitem"]`
+6. `main [class*="message" i]`
+7. `main li`
 
 It accepts only visible candidates with a timestamp-like `datetime`, visible
-text or media evidence, and no `nav`/`aside` ancestor. If a selector is too
-broad or no timestamps are exposed, the capture reports selector notes and
-skips uncertain rows rather than inventing dates or silently claiming
-coverage. Adjustments should be made only after inspecting one user-opened
-chat and should remain DOM-only and read-only.
+text or media evidence, and no `nav`/`aside` ancestor. Timestamp-anchored leaf
+rows prevent Snapchat’s visible conversation from being confused with its
+sidebar `role=listitem` nodes. The adapter derives author labels from explicit
+author metadata or the visible message header, and uses visible `[dir="auto"]`
+content when available. If a selector is too broad or no timestamps are
+exposed, the capture reports selector notes and skips uncertain rows rather
+than inventing dates or silently claiming coverage. Adjustments should remain
+DOM-only and read-only.
+
+The Rick Bailer smoke test captured six timestamped visible rows, skipped one
+visible row without a timezone-aware timestamp, and correctly reported a
+partial range (`at_start: false`, `at_end: true`). The resulting raw capture
+and normalized archive were validated and built locally under ignored
+`private-data/`; they were not committed or pushed.
 
 If the browser is logged out, stop at the synthetic smoke build in the README;
 do not attempt credential entry through CatchThat.
-
