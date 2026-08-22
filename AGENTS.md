@@ -24,7 +24,9 @@ currently open Snapchat Web chat. It must never:
 The adapter may copy a displayed participant avatar from already-rendered
 readable pixels into a bounded data URL for local import. It must not fetch a
 remote avatar; if pixels are not readable, preserve only the visible reference
-and say so in provenance.
+and say so in provenance. It may do the same for a displayed message `img` or
+Bitmoji/sticker canvas; video/audio and unreadable or cross-origin media remain
+references or placeholders.
 
 The user controls which chat is open and explicitly starts each capture action.
 An action may perform one bounded `older` or `newer` scroll step, or a bounded
@@ -46,6 +48,10 @@ python -m catchthat build fixtures/sample/archive.json --output dist/sample
 python -m catchthat verify dist/sample
 python -m catchthat export-text fixtures/sample/archive.json
 python -m catchthat import-capture --input private-data\capture-001.json --output private-data\capture-001.archive.json
+python -m catchthat capture-result --input private-data\capture-001.json `
+  --output private-data\capture-001.archive.json `
+  --build-output private-data\capture-001-view `
+  --text-output private-data\capture-001.txt
 python -m catchthat merge-captures `
   --input private-data\range-001.json `
   --input private-data\range-002.json `
@@ -53,6 +59,11 @@ python -m catchthat merge-captures `
 python -m catchthat verify-coverage private-data\merged-transcript.json
 python -m unittest discover -s tests -v
 ```
+
+`capture-result` is the post-capture convenience command: it normalizes one
+saved foreground adapter result and can build the offline viewer and readable
+text export in the same invocation. It does not open a browser or capture a
+chat by itself; the browser evaluate action remains explicitly user-triggered.
 
 `import-transcript` is retained as a friendly alias for
 `import-capture`. `merge-transcripts` is retained as an alias for
@@ -87,7 +98,11 @@ The adapter intentionally uses conservative selector candidates because
 Snapchat Web DOM details can vary by release. If the live browser is logged
 out, use the synthetic fixture and run the commands above. The exact next
 smoke-test step is documented in `docs/live-smoke-test.md`: sign in manually in
-the in-app browser, open one intended chat yourself, run the read-only evaluate
-adapter once, then use an explicit one-step `older` or `newer` invocation while
-inspecting its selector notes and boundary result before importing the range.
+the in-app browser, open one intended chat yourself, and use a writable evaluate
+surface to install the visible controls from `tools/snapchat_capture_controls.js`.
+If the surface is read-only/frozen, run the adapter and its local `capture`
+function in one explicit async evaluation instead of attempting DOM injection.
+In either case, inspect selector notes and boundary results before importing the
+range. The direct one-step `older`/`newer` invocation remains available for
+selector debugging.
 Never enter credentials into CatchThat or the tool.

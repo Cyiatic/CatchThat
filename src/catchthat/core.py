@@ -30,13 +30,15 @@ _MEDIA_KIND_ALIASES = {
 }
 _SAVED_STATES = frozenset({"saved", "unsaved", "unknown"})
 _RETENTION_STATES = frozenset({"kept_in_chat", "view_once", "expires", "unknown"})
-_AVATAR_DATA_MAX_BYTES = 4 * 1024 * 1024
-_AVATAR_DATA_MIME_EXTENSIONS = {
+_MEDIA_DATA_MAX_BYTES = 4 * 1024 * 1024
+_DATA_MIME_EXTENSIONS = {
     "image/gif": "gif",
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
 }
+_AVATAR_DATA_MAX_BYTES = _MEDIA_DATA_MAX_BYTES
+_AVATAR_DATA_MIME_EXTENSIONS = _DATA_MIME_EXTENSIONS
 
 
 def _load_json_value(path: Path) -> Any:
@@ -156,6 +158,8 @@ def _validate_media(value: Any, field: str, errors: list[str]) -> None:
         size = value["size_bytes"]
         if isinstance(size, bool) or not isinstance(size, int) or size < 0:
             errors.append(f"{field}.size_bytes must be a non-negative integer or null")
+    if "media_provenance" in value and value["media_provenance"] is not None:
+        _validate_media_provenance(value["media_provenance"], f"{field}.media_provenance", errors)
 
 
 def _validate_visible_profile(value: Any, field: str, errors: list[str]) -> None:
@@ -170,6 +174,17 @@ def _validate_visible_profile(value: Any, field: str, errors: list[str]) -> None
 
 
 def _validate_avatar_provenance(value: Any, field: str, errors: list[str]) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{field} must be an object or null")
+        return
+    for key in ("kind", "method", "note"):
+        if value.get(key) is not None and not isinstance(value[key], str):
+            errors.append(f"{field}.{key} must be a string or null")
+    if value.get("captured") is not None and not isinstance(value["captured"], bool):
+        errors.append(f"{field}.captured must be boolean")
+
+
+def _validate_media_provenance(value: Any, field: str, errors: list[str]) -> None:
     if not isinstance(value, dict):
         errors.append(f"{field} must be an object or null")
         return
@@ -212,7 +227,7 @@ def _validate_provenance(value: Any, field: str, errors: list[str]) -> None:
     if value.get("source_file") is not None:
         if not isinstance(value["source_file"], str) or _normalise_local_reference(value["source_file"]) is None:
             errors.append(f"{field}.source_file must be a safe relative source path")
-    for key in ("source_id", "source_url", "capture_id"):
+    for key in ("source_id", "source_url", "capture_id", "selector"):
         if value.get(key) is not None and not isinstance(value[key], str):
             errors.append(f"{field}.{key} must be a string or null")
     if value.get("source_url") is not None and not _is_http_url(value["source_url"]):
@@ -223,6 +238,16 @@ def _validate_provenance(value: Any, field: str, errors: list[str]) -> None:
             errors.append(f"{field}.record_index must be a non-negative integer")
     if "id_generated" in value and not isinstance(value["id_generated"], bool):
         errors.append(f"{field}.id_generated must be boolean")
+    if "generated_id_collision_index" in value:
+        collision_index = value["generated_id_collision_index"]
+        if isinstance(collision_index, bool) or not isinstance(collision_index, int) or collision_index < 2:
+            errors.append(f"{field}.generated_id_collision_index must be an integer >= 2")
+    if "capture_walk_index" in value:
+        walk_index = value["capture_walk_index"]
+        if isinstance(walk_index, bool) or not isinstance(walk_index, int) or walk_index < 0:
+            errors.append(f"{field}.capture_walk_index must be a non-negative integer")
+    if "visible_dom" in value and not isinstance(value["visible_dom"], bool):
+        errors.append(f"{field}.visible_dom must be boolean")
     if "notes" in value and (
         not isinstance(value["notes"], list) or any(not isinstance(note, str) for note in value["notes"])
     ):
@@ -255,6 +280,29 @@ def _validate_capture_range(value: Any, field: str, errors: list[str]) -> None:
     for key in ("at_start", "at_end"):
         if key in value and not isinstance(value[key], bool):
             errors.append(f"{field}.{key} must be boolean")
+    if "message_ids" in value and (
+        not isinstance(value["message_ids"], list)
+        or any(not isinstance(message_id, str) or not message_id.strip() for message_id in value["message_ids"])
+    ):
+        errors.append(f"{field}.message_ids must be an array of non-empty strings")
+    if "scroll_settle_ms" in value:
+        settle_ms = value["scroll_settle_ms"]
+        if isinstance(settle_ms, bool) or not isinstance(settle_ms, (int, float)) or settle_ms < 0:
+            errors.append(f"{field}.scroll_settle_ms must be a non-negative number")
+    if "scroll_walk" in value:
+        walk = value["scroll_walk"]
+        if not isinstance(walk, dict):
+            errors.append(f"{field}.scroll_walk must be an object")
+        else:
+            if walk.get("stopped_reason") is not None and not isinstance(walk["stopped_reason"], str):
+                errors.append(f"{field}.scroll_walk.stopped_reason must be a string or null")
+            for key in ("max_steps", "steps", "ranges_captured", "unique_ranges", "repeated_ranges", "unchanged_window_steps", "settle_ms"):
+                if key in walk:
+                    count = walk[key]
+                    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                        errors.append(f"{field}.scroll_walk.{key} must be a non-negative integer")
+            if "reached_boundary" in walk and not isinstance(walk["reached_boundary"], bool):
+                errors.append(f"{field}.scroll_walk.reached_boundary must be boolean")
     if "selector_notes" in value and (
         not isinstance(value["selector_notes"], list)
         or any(not isinstance(note, str) for note in value["selector_notes"])
@@ -270,6 +318,12 @@ def _validate_capture_range(value: Any, field: str, errors: list[str]) -> None:
                     or any(not isinstance(message_id, str) or not message_id.strip() for message_id in item["message_ids"])
                 ):
                     errors.append(f"{field}.ranges[{index}].message_ids must be an array of non-empty strings")
+                if "rendered_window_changed" in item and item["rendered_window_changed"] is not None and not isinstance(item["rendered_window_changed"], bool):
+                    errors.append(f"{field}.ranges[{index}].rendered_window_changed must be boolean or null")
+                if "unchanged_window_steps" in item:
+                    count = item["unchanged_window_steps"]
+                    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                        errors.append(f"{field}.ranges[{index}].unchanged_window_steps must be a non-negative integer")
 
 
 def _validate_coverage(value: Any, field: str, errors: list[str]) -> None:
@@ -604,13 +658,13 @@ def _normalise_source_ref(value: Any) -> dict[str, Any] | None:
     return result
 
 
-def _decode_avatar_data_url(value: Any) -> tuple[bytes, str] | None:
+def _decode_data_url(value: Any, max_bytes: int) -> tuple[bytes, str] | None:
     if not isinstance(value, str) or not value.lower().startswith("data:") or "," not in value:
         return None
     header, payload = value.split(",", 1)
     parts = header[5:].split(";")
     mime = parts[0].strip().lower()
-    extension = _AVATAR_DATA_MIME_EXTENSIONS.get(mime)
+    extension = _DATA_MIME_EXTENSIONS.get(mime)
     if not extension:
         return None
     try:
@@ -620,9 +674,13 @@ def _decode_avatar_data_url(value: Any) -> tuple[bytes, str] | None:
             data = unquote_to_bytes(payload)
     except (ValueError, binascii.Error):
         return None
-    if not data or len(data) > _AVATAR_DATA_MAX_BYTES:
+    if not data or len(data) > max_bytes:
         return None
     return data, extension
+
+
+def _decode_avatar_data_url(value: Any) -> tuple[bytes, str] | None:
+    return _decode_data_url(value, _AVATAR_DATA_MAX_BYTES)
 
 
 def _materialize_avatar_data_url(participant: dict[str, Any], record: dict[str, Any], output_root: Path, index: int) -> None:
@@ -656,6 +714,50 @@ def _materialize_avatar_data_url(participant: dict[str, Any], record: dict[str, 
             "captured": False,
             "note": "The avatar reference was visible, but image bytes were not readable without a remote fetch.",
         }
+
+
+def _materialize_media_data_url(
+    media: dict[str, Any],
+    record: Any,
+    output_root: Path,
+    message_index: int,
+    media_index: int,
+) -> None:
+    if media.get("path") or not isinstance(record, dict):
+        return
+    data_url = _first(record, "media_data_url", "mediaDataUrl", "data_url", "dataUrl", default=None)
+    if data_url is None:
+        return
+    capture_method = _first(record, "media_capture_method", "mediaCaptureMethod", "capture_method", default=None)
+    capture_method = _clean(capture_method) if capture_method else "visible_pixels_png"
+    capture_note = _first(record, "media_capture_note", "mediaCaptureNote", "capture_note", "note", default=None)
+    decoded = _decode_data_url(data_url, _MEDIA_DATA_MAX_BYTES)
+    if not decoded:
+        media["placeholder"] = "Visible media pixels were supplied but could not be materialized safely; the source reference remains available."
+        media["media_provenance"] = {
+            "kind": "visible_dom_media",
+            "method": capture_method,
+            "captured": False,
+            "note": "The supplied data URL was invalid, unsupported, or exceeded the local asset limit.",
+        }
+        return
+    data, extension = decoded
+    label = media.get("label") or media.get("kind") or "media"
+    stem = re.sub(r"[^a-z0-9]+", "-", str(label).lower()).strip("-") or f"message-{message_index + 1}-media-{media_index + 1}"
+    digest = hashlib.sha256(data).hexdigest()[:12]
+    reference = f"assets/media/{stem}-{digest}.{extension}"
+    destination = output_root / reference
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if not destination.is_file() or destination.read_bytes() != data:
+        destination.write_bytes(data)
+    media["path"] = reference
+    media["size_bytes"] = len(data)
+    media["media_provenance"] = {
+        "kind": "visible_dom_media",
+        "method": capture_method,
+        "captured": True,
+        "note": _clean(capture_note) if capture_note else "Image bytes were materialized from displayed pixels without a remote fetch.",
+    }
 
 
 def _normalise_transcript_participant(record: dict[str, Any], index: int) -> dict[str, Any]:
@@ -750,9 +852,11 @@ def _normalise_transcript_message(
     participants: list[dict[str, Any]],
     participant_by_id: dict[str, dict[str, Any]],
     default_source_url: str | None = None,
+    output_root: Path | None = None,
 ) -> dict[str, Any]:
     raw_id = _raw_message_id(record, index)
-    id_generated = raw_id is None
+    input_provenance = record.get("provenance") if isinstance(record.get("provenance"), dict) else {}
+    id_generated = raw_id is None or bool(input_provenance.get("id_generated"))
     message_id = raw_id or _message_digest(record, index)
     timestamp = _normalise_required_timestamp(
         _first(record, "timestamp", "Timestamp", "created_at", "createdAt", "Date", default=None), index
@@ -779,7 +883,12 @@ def _normalise_transcript_message(
         media_value = []
     elif not isinstance(media_value, list):
         media_value = [media_value]
-    media = [_normalise_media(item) for item in media_value]
+    media = []
+    for media_index, item in enumerate(media_value):
+        normalized_media = _normalise_media(item)
+        if output_root is not None:
+            _materialize_media_data_url(normalized_media, item, output_root, index, media_index)
+        media.append(normalized_media)
     explicit_kind = _first(record, "content_kind", "content_type", default=None)
     content_kind = str(explicit_kind).strip() if explicit_kind else "mixed" if content.strip() and media else "media_placeholder" if media else "visible_text" if content.strip() else "empty"
     if content_kind not in _CONTENT_KINDS:
@@ -799,7 +908,9 @@ def _normalise_transcript_message(
     }
     if id_generated:
         message["provenance"]["id_generated"] = True
-    source_id = _first(record, "source_id", "source_message_id", default=raw_id)
+    source_id = _first(record, "source_id", "source_message_id", default=None)
+    if source_id is None and not id_generated:
+        source_id = raw_id
     if source_id is not None and str(source_id).strip():
         message["provenance"]["source_id"] = str(source_id).strip()
     source_url = _first(record, "source_url", "source_link", default=default_source_url)
@@ -825,7 +936,18 @@ def _normalise_transcript_message(
         message["edited_at"] = _normalise_required_timestamp(edited_at, index)
     if isinstance(record.get("grouped"), bool):
         message["grouped"] = record["grouped"]
-    notes = record.get("provenance", {}).get("notes") if isinstance(record.get("provenance"), dict) else None
+    for field in ("capture_id", "selector"):
+        value = input_provenance.get(field)
+        if value is not None and str(value).strip():
+            message["provenance"][field] = str(value).strip()
+    for field in ("capture_walk_index", "generated_id_collision_index"):
+        value = input_provenance.get(field)
+        minimum = 2 if field == "generated_id_collision_index" else 0
+        if isinstance(value, int) and not isinstance(value, bool) and value >= minimum:
+            message["provenance"][field] = value
+    if input_provenance.get("visible_dom") is True:
+        message["provenance"]["visible_dom"] = True
+    notes = input_provenance.get("notes")
     if isinstance(notes, list):
         message["provenance"]["notes"] = [str(note) for note in notes if isinstance(note, str)]
     return message
@@ -1284,8 +1406,11 @@ def import_transcript(input_path: Path, output_path: Path) -> dict[str, Any]:
 
     source_input = input_metadata.get("source") if isinstance(input_metadata.get("source"), dict) else {}
     source_url = source_input.get("url") if _is_http_url(source_input.get("url")) else None
-    messages = [
-        _normalise_transcript_message(
+    messages: list[dict[str, Any]] = []
+    used_message_ids: set[str] = set()
+    generated_id_counts: dict[str, int] = {}
+    for index, record in enumerate(records):
+        message = _normalise_transcript_message(
             record,
             index,
             input_path.name,
@@ -1293,9 +1418,21 @@ def import_transcript(input_path: Path, output_path: Path) -> dict[str, Any]:
             participants,
             participant_by_id,
             default_source_url=source_url,
+            output_root=output_path.resolve().parent,
         )
-        for index, record in enumerate(records)
-    ]
+        if message.get("provenance", {}).get("id_generated"):
+            base_id = message["id"]
+            occurrence = generated_id_counts.get(base_id, 0) + 1
+            candidate_id = base_id if occurrence == 1 else f"{base_id}-{occurrence}"
+            while candidate_id in used_message_ids:
+                occurrence += 1
+                candidate_id = f"{base_id}-{occurrence}"
+            generated_id_counts[base_id] = occurrence
+            if candidate_id != base_id:
+                message["id"] = candidate_id
+                message["provenance"]["generated_id_collision_index"] = occurrence
+        used_message_ids.add(message["id"])
+        messages.append(message)
     messages.sort(key=lambda item: (item["timestamp"], item["id"]))
     metadata: dict[str, Any] = {
         "kind": input_metadata.get("kind") or (value.get("kind") if isinstance(value, dict) else None) or "snapchat_chat",

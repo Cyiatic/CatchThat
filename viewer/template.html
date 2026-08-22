@@ -644,6 +644,10 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
       overscroll-behavior: contain;
     }
     body.show-provenance .provenance-panel { transform: translateX(0); visibility: visible; pointer-events: auto; }
+    .provenance-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .provenance-close { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 1px solid var(--snap-line); border-radius: 50%; background: #242628; color: var(--ink-soft); }
+    .provenance-close:hover { border-color: var(--yellow); color: var(--ink); }
+    .provenance-close:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
     .provenance-panel .panel-heading { font-size: 16px; }
     .provenance-panel .selected-message { border-top-color: var(--snap-line); border-bottom-color: var(--snap-line); }
     .provenance-panel .detail-section { border-bottom-color: var(--snap-line); }
@@ -914,10 +918,17 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
         </div>
       </aside>
 
-      <aside class="provenance-panel" id="provenance-panel" aria-label="Message provenance">
+      <aside class="provenance-panel" id="provenance-panel" role="dialog" aria-modal="true" aria-labelledby="provenance-heading" aria-hidden="true" tabindex="-1">
         <section>
-          <div class="kicker">Evidence rail</div>
-          <h2 class="panel-heading">Source & provenance</h2>
+          <div class="provenance-panel-heading">
+            <div>
+              <div class="kicker">Evidence rail</div>
+              <h2 class="panel-heading" id="provenance-heading">Source & provenance</h2>
+            </div>
+            <button class="provenance-close" type="button" data-action="close-provenance" aria-label="Close evidence drawer" title="Close evidence drawer">
+              <svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+          </div>
           <p class="provenance-intro">Select a row to inspect its source fields and visible evidence.</p>
           <div class="selected-message" id="selected-message" aria-live="polite"></div>
           <div class="detail-section" id="record-details"></div>
@@ -956,7 +967,8 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
       return [message.id, [message.content, message.author_id, participant.display_name, participant.username, ...Object.values(profile), ...(Array.isArray(message.media) ? message.media.flatMap((item) => [item.label, item.placeholder, item.kind, item.subtype, item.alt]) : []), message.saved_state?.evidence, message.retention?.evidence].filter(Boolean).join(" ").toLocaleLowerCase()];
     }));
     const windowSize = 240;
-    const state = { query: "", authorIds: new Set(participants.keys()), timestampMode: "local", windowStart: 0, selected: null, edgeTarget: "oldest" };
+    const state = { query: "", authorIds: new Set(participants.keys()), timestampMode: "local", windowStart: 0, selected: null, edgeTarget: "oldest", panel: null };
+    let lastProvenanceTrigger = null;
 
     const byId = (id) => document.getElementById(id);
     const clear = (node) => { while (node && node.firstChild) node.removeChild(node.firstChild); return node; };
@@ -1061,7 +1073,7 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
         }
         const caption = make("figcaption", "media-caption");
         caption.appendChild(make("strong", "", media.label || (isSticker ? "Bitmoji or sticker" : kind === "image" ? "Image" : "Media")));
-        const note = media.path ? "Local asset" : safeHttp(media.source_url) ? "Reference only · not downloaded" : media.placeholder || "No bytes captured";
+        const note = media.media_provenance?.captured ? "Captured visible pixels · local asset" : media.path ? "Local asset" : safeHttp(media.source_url) ? "Reference only · not downloaded" : media.placeholder || "No bytes captured";
         caption.appendChild(make("span", "media-note", note));
         const sourceUrl = safeHttp(media.source_url);
         if (sourceUrl) {
@@ -1083,7 +1095,7 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
         if (!media || typeof media !== "object") return;
         const item = make("div", "media-summary-item");
         const kind = media.subtype === "bitmoji" ? "Bitmoji" : media.kind || "Media";
-        const note = media.path ? "Local asset" : safeHttp(media.source_url) ? "Reference only" : media.placeholder || "No bytes captured";
+        const note = media.media_provenance?.captured ? "Captured visible pixels · local asset" : media.path ? "Local asset" : safeHttp(media.source_url) ? "Reference only" : media.placeholder || "No bytes captured";
         item.append(make("strong", "", `${kind} · ${media.label || "Untitled"}`), make("span", "", note));
         const sourceUrl = safeHttp(media.source_url);
         if (sourceUrl) {
@@ -1314,13 +1326,32 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
     const syncUrlState = () => {
       try {
         const url = new URL(location.href);
-        url.searchParams.delete("q"); url.searchParams.delete("author"); url.searchParams.delete("time");
+        url.searchParams.delete("q"); url.searchParams.delete("author"); url.searchParams.delete("time"); url.searchParams.delete("panel");
         if (state.query) url.searchParams.set("q", state.query);
         if (!allAuthorsSelected()) url.searchParams.set("author", authorIds().filter((id) => state.authorIds.has(id)).join(","));
         if (state.timestampMode === "utc") url.searchParams.set("time", "utc");
+        if (state.panel === "evidence") url.searchParams.set("panel", "evidence");
         url.hash = state.selected ? `message=${encodeURIComponent(state.selected)}` : "";
         history.replaceState(null, "", url.toString());
       } catch { /* file viewers may not expose a mutable history URL */ }
+    };
+    const setProvenanceOpen = (open, trigger = null, options = {}) => {
+      const panel = byId("provenance-panel");
+      const button = document.querySelector('[data-action="toggle-provenance"]');
+      if (!panel || !button) return;
+      if (open && trigger) lastProvenanceTrigger = trigger;
+      state.panel = open ? "evidence" : null;
+      document.body.classList.toggle("show-provenance", open);
+      panel.setAttribute("aria-hidden", String(!open));
+      button.setAttribute("aria-expanded", String(open));
+      const label = open ? "Hide evidence drawer" : "Show evidence drawer";
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      if (options.updateUrl !== false) syncUrlState();
+      if (options.focus !== false) {
+        if (open) panel.querySelector("[data-action='close-provenance']")?.focus();
+        else lastProvenanceTrigger?.focus?.();
+      }
     };
     const selectMessage = (id, updateHash = true) => {
       const filtered = filteredMessages();
@@ -1339,6 +1370,7 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
       const requestedAuthors = (params.get("author") || "").split(",").filter((id) => participants.has(id));
       state.authorIds = new Set(requestedAuthors.length ? requestedAuthors : authorIds());
       state.timestampMode = params.get("time") === "utc" ? "utc" : "local";
+      state.panel = params.get("panel") === "evidence" ? "evidence" : null;
     };
     const readHash = () => { const match = location.hash.match(/^#message=(.*)$/); if (!match) return; let id = ""; try { id = decodeURIComponent(match[1]); } catch { return; } if (messages.some((message) => message.id === id)) state.selected = id; };
     const wire = () => {
@@ -1376,10 +1408,24 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
       document.querySelector('[data-action="print"]').addEventListener("click", () => window.print());
       document.querySelector('[data-action="toggle-coverage"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-coverage"); syncDisclosureButton(event, expanded, "Show archive coverage status", "Hide archive coverage status"); });
       document.querySelector('[data-action="edge"]').addEventListener("click", () => { if (state.edgeTarget === "newest") scrollToNewest(); else scrollToOldest(); }); document.querySelector('[data-action="older"]').addEventListener("click", () => { state.windowStart = Math.max(0, state.windowStart - windowSize); renderMessages(); renderSelected(); }); document.querySelector('[data-action="newer"]').addEventListener("click", () => { state.windowStart += windowSize; renderMessages(); renderSelected(); });
-      document.querySelector('[data-action="toggle-filters"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-filters"); syncDisclosureButton(event, expanded, "Show message visibility controls", "Hide message visibility controls"); }); document.querySelector('[data-action="toggle-provenance"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-provenance"); syncDisclosureButton(event, expanded, "Show evidence drawer", "Hide evidence drawer"); });
-      document.addEventListener("keydown", (event) => { if (event.key === "/" && document.activeElement?.tagName !== "INPUT") { event.preventDefault(); byId("search-input").focus(); } });
-      window.addEventListener("hashchange", () => { readUrlState(); readHash(); render(); });
-      renderCoverage(); renderCaptureLedger(); readUrlState(); byId("search-input").value = state.query; byId("timestamp-mode").value = state.timestampMode; syncTimeControl(); readHash(); const hasDeepLink = Boolean(state.selected); const initialFiltered = filteredMessages(); state.selected = state.selected || initialFiltered[initialFiltered.length - 1]?.id || null; state.edgeTarget = state.selected === initialFiltered[0]?.id ? "newest" : "oldest"; if (!hasDeepLink) state.windowStart = Math.max(0, initialFiltered.length - windowSize); syncUrlState(); render(); if (!hasDeepLink) requestAnimationFrame(() => scrollToMessage(initialFiltered[initialFiltered.length - 1], "end")); else requestAnimationFrame(() => scrollToMessage(initialFiltered.find((message) => message.id === state.selected), "nearest"));
+      document.querySelector('[data-action="toggle-filters"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-filters"); syncDisclosureButton(event, expanded, "Show message visibility controls", "Hide message visibility controls"); });
+      document.querySelector('[data-action="toggle-provenance"]').addEventListener("click", (event) => { setProvenanceOpen(!document.body.classList.contains("show-provenance"), event.currentTarget); });
+      document.querySelector('[data-action="close-provenance"]').addEventListener("click", () => setProvenanceOpen(false));
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "/" && document.activeElement?.tagName !== "INPUT") { event.preventDefault(); byId("search-input").focus(); return; }
+        if (event.key === "Escape" && document.body.classList.contains("show-provenance")) { event.preventDefault(); setProvenanceOpen(false); return; }
+        if (event.key !== "Tab" || !document.body.classList.contains("show-provenance")) return;
+        const panel = byId("provenance-panel");
+        const focusable = Array.from(panel.querySelectorAll("button, a[href], [tabindex]:not([tabindex='-1'])")).filter((node) => !node.hasAttribute("disabled"));
+        if (!focusable.length) { event.preventDefault(); panel.focus(); return; }
+        const first = focusable[0]; const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      });
+      const syncFromUrl = () => { readUrlState(); setProvenanceOpen(state.panel === "evidence", null, { focus: false, updateUrl: false }); readHash(); render(); };
+      window.addEventListener("hashchange", syncFromUrl);
+      window.addEventListener("popstate", syncFromUrl);
+      renderCoverage(); renderCaptureLedger(); readUrlState(); setProvenanceOpen(state.panel === "evidence", null, { focus: false, updateUrl: false }); byId("search-input").value = state.query; byId("timestamp-mode").value = state.timestampMode; syncTimeControl(); readHash(); const hasDeepLink = Boolean(state.selected); const initialFiltered = filteredMessages(); state.selected = state.selected || initialFiltered[initialFiltered.length - 1]?.id || null; state.edgeTarget = state.selected === initialFiltered[0]?.id ? "newest" : "oldest"; if (!hasDeepLink) state.windowStart = Math.max(0, initialFiltered.length - windowSize); syncUrlState(); render(); if (!hasDeepLink) requestAnimationFrame(() => scrollToMessage(initialFiltered[initialFiltered.length - 1], "end")); else requestAnimationFrame(() => scrollToMessage(initialFiltered.find((message) => message.id === state.selected), "nearest"));
     };
     wire();
   })();

@@ -45,6 +45,16 @@ def build_parser() -> argparse.ArgumentParser:
         importer.add_argument("--input", required=True, type=_path)
         importer.add_argument("--output", required=True, type=_path)
 
+    capture_result = subparsers.add_parser(
+        "capture-result",
+        help="normalize one saved foreground adapter result and optionally build its offline viewer",
+    )
+    capture_result.add_argument("--input", required=True, type=_path)
+    capture_result.add_argument("--output", required=True, type=_path, help="normalized archive JSON path")
+    capture_result.add_argument("--build-output", type=_path, help="optional generated viewer directory")
+    capture_result.add_argument("--text-output", type=_path, help="optional readable Person: message transcript")
+    capture_result.add_argument("--timezone", help="override the archive display timezone for --text-output")
+
     for name in ("merge-captures", "merge-transcripts"):
         merge = subparsers.add_parser(name, help="merge overlapping attended Snapchat capture ranges")
         merge.add_argument("--input", action="append", required=True, type=_path, help="capture JSON; repeat for each range")
@@ -103,6 +113,27 @@ def main(argv: list[str] | None = None) -> int:
             coverage = archive.get("metadata", {}).get("coverage")
             if isinstance(coverage, dict):
                 print(f"Coverage: {coverage.get('status', 'unverified')}")
+            return 0
+
+        if args.command == "capture-result":
+            archive = import_transcript(args.input, args.output)
+            print(f"Imported local capture archive: {args.output}")
+            print(f"Messages: {len(archive['messages'])}")
+            print(f"Participants: {len(archive['participants'])}")
+            coverage = archive.get("metadata", {}).get("coverage")
+            if isinstance(coverage, dict):
+                print(f"Coverage: {coverage.get('status', 'unverified')}")
+            if args.build_output:
+                missing = build_archive(args.output, args.build_output)
+                print(f"Built offline viewer: {args.build_output / 'index.html'}")
+                if missing:
+                    print("Missing local assets:")
+                    for reference in missing:
+                        print(f"- {reference}")
+            if args.text_output:
+                args.text_output.parent.mkdir(parents=True, exist_ok=True)
+                args.text_output.write_text(render_text(archive, args.timezone) + "\n", encoding="utf-8", newline="\n")
+                print(f"Wrote readable transcript: {args.text_output}")
             return 0
 
         if args.command in {"merge-captures", "merge-transcripts"}:

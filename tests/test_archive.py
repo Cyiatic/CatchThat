@@ -194,6 +194,74 @@ class ArchiveTests(unittest.TestCase):
             self.assertIn("assets/avatars/eli.svg", missing)
             self.assertTrue((built / participant["avatar_path"]).is_file())
 
+    def test_import_materializes_visible_message_pixels_and_keeps_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = deepcopy(self.archive)
+            raw["messages"][0]["media"] = [{
+                "kind": "image",
+                "label": "visible-photo",
+                "source_url": "https://example.invalid/photo.png",
+                "data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+                "capture_method": "visible_pixels_png",
+                "capture_note": "Captured from the rendered message image.",
+            }]
+            input_path = root / "media-capture.json"
+            input_path.write_text(json.dumps(raw), encoding="utf-8")
+            output = root / "archive.json"
+
+            archive = import_transcript(input_path, output)
+            media = archive["messages"][0]["media"][0]
+            self.assertTrue(media["path"].startswith("assets/media/visible-photo-"))
+            self.assertTrue((root / media["path"]).is_file())
+            self.assertEqual(media["media_provenance"]["method"], "visible_pixels_png")
+            self.assertTrue(media["media_provenance"]["captured"])
+            self.assertEqual(media["size_bytes"], 68)
+            self.assertNotIn("data:image", json.dumps(archive))
+            self.assertEqual(validate_archive(archive), [])
+
+            built = root / "built"
+            missing = build_archive(output, built)
+            self.assertNotIn(media["path"], missing)
+            self.assertTrue((built / media["path"]).is_file())
+
+    def test_import_disambiguates_identical_generated_message_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            input_path = root / "duplicates.json"
+            input_path.write_text(
+                json.dumps([
+                    {"timestamp": "2024-01-02T03:04:00Z", "author": "Mara", "content": "same"},
+                    {"timestamp": "2024-01-02T03:04:00Z", "author": "Mara", "content": "same"},
+                ]),
+                encoding="utf-8",
+            )
+            archive = import_transcript(input_path, root / "archive.json")
+            self.assertEqual(validate_archive(archive), [])
+            self.assertEqual(len({message["id"] for message in archive["messages"]}), 2)
+            self.assertEqual(archive["messages"][1]["provenance"]["generated_id_collision_index"], 2)
+
+    def test_capture_result_can_import_build_and_export_in_one_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            capture = root / "capture.json"
+            capture.write_text(json.dumps(self.archive), encoding="utf-8")
+            archive_path = root / "archive.json"
+            viewer_path = root / "viewer"
+            text_path = root / "transcript.txt"
+            self.assertEqual(
+                cli_main([
+                    "capture-result",
+                    "--input", str(capture),
+                    "--output", str(archive_path),
+                    "--build-output", str(viewer_path),
+                    "--text-output", str(text_path),
+                ]),
+                0,
+            )
+            self.assertTrue((viewer_path / "index.html").is_file())
+            self.assertIn("Mara: Are you still up?", text_path.read_text(encoding="utf-8"))
+
     def test_import_tracks_nested_walk_ranges_for_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -310,6 +378,9 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("scrollTo_fallback", capture_source)
         self.assertIn("message_ids", capture_source)
         self.assertIn("repeated_ranges", capture_source)
+        self.assertIn("rendered_window_unchanged", capture_source)
+        self.assertIn("settle_ms", capture_source)
+        self.assertIn("generated_id_collision_index", capture_source)
         self.assertIn("no follow-up scroll", capture_source)
         self.assertIn("visible DOM", capture_source)
         self.assertIn("timestamp-anchored", capture_source)
@@ -318,7 +389,10 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("headerAuthor", capture_source)
         self.assertIn("mediaDescriptor", capture_source)
         self.assertIn("captureVisibleAvatar", capture_source)
+        self.assertIn("captureVisibleMedia", capture_source)
         self.assertIn("canvas.toDataURL", capture_source)
+        self.assertIn("Object.isExtensible", capture_source)
+        self.assertIn("document?.createElement", capture_source)
         self.assertIn("avatar_data_url", capture_source)
         self.assertIn("avatar_capture_method", capture_source)
         self.assertIn('item.subtype = "bitmoji"', capture_source)
@@ -331,6 +405,13 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("detectedKind === \"unknown\"", capture_source)
         for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click("):
             self.assertNotIn(forbidden, capture_source)
+
+    def test_capture_controls_are_visible_user_triggered_and_local(self) -> None:
+        controls_source = (PROJECT_ROOT / "tools" / "snapchat_capture_controls.js").read_text(encoding="utf-8")
+        for label in ("Capture current", "Walk older", "Walk newer", "api.lastResult", "currently rendered chat window", 'typeof capture === "function"'):
+            self.assertIn(label, controls_source)
+        for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click("):
+            self.assertNotIn(forbidden, controls_source)
 
     def test_merge_deduplicates_overlap_and_verifies_boundaries(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -484,10 +565,13 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn('role="list" aria-label="Captured messages"', template)
         self.assertIn('id="selected-message" aria-live="polite"', template)
         self.assertIn("content-visibility: auto", template)
-        self.assertIn("const state = { query: \"\", authorIds: new Set(participants.keys()), timestampMode: \"local\", windowStart: 0, selected: null, edgeTarget: \"oldest\" }", template)
+        self.assertIn("const state = { query: \"\", authorIds: new Set(participants.keys()), timestampMode: \"local\", windowStart: 0, selected: null, edgeTarget: \"oldest\", panel: null }", template)
         self.assertIn('data-action="toggle-coverage"', template)
         self.assertIn('class="evidence-button"', template)
         self.assertIn('data-action="toggle-provenance"', template)
+        self.assertIn('data-action="close-provenance"', template)
+        self.assertIn('role="dialog"', template)
+        self.assertIn('searchParams.set("panel", "evidence")', template)
         self.assertIn('rel="icon"', template)
         self.assertIn('viewBox="0 0 64 48"', template)
         self.assertIn('M39 18h12l9 6-9 6H39z', template)

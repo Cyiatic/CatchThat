@@ -8,6 +8,7 @@ async function capture(options = {}) {
     : "UTC";
   const isoWithTimezone = (value) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(String(value || ""));
   const fileName = (value) => {
+    if (!value) return "media";
     try {
       const path = new URL(value, location.href).pathname;
       return path.split("/").filter(Boolean).pop() || "media";
@@ -54,6 +55,7 @@ async function capture(options = {}) {
     const naturalHeight = Number(element.naturalHeight || dimension(element, "height"));
     if (!element.complete || !naturalWidth || !naturalHeight) return null;
     const scale = Math.min(1, 512 / Math.max(naturalWidth, naturalHeight));
+    if (typeof document?.createElement !== "function") return null;
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(naturalHeight * scale));
@@ -67,6 +69,35 @@ async function capture(options = {}) {
     } catch {
       // A cross-origin image without a readable CORS response taints the canvas.
       // Keep the visible URL as provenance instead of attempting a network read.
+      return null;
+    }
+  };
+  const captureVisibleMedia = (element) => {
+    if (!element || !isVisible(element)) return null;
+    const tag = element.tagName?.toLowerCase();
+    if (tag !== "img" && tag !== "canvas") return null;
+    const naturalWidth = Number(element.naturalWidth || element.width || dimension(element, "width"));
+    const naturalHeight = Number(element.naturalHeight || element.height || dimension(element, "height"));
+    if (!naturalWidth || !naturalHeight || (tag === "img" && !element.complete)) return null;
+    const scale = Math.min(1, 1024 / Math.max(naturalWidth, naturalHeight));
+    if (typeof document?.createElement !== "function") return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(naturalHeight * scale));
+    try {
+      const context = canvas.getContext("2d");
+      if (!context) return null;
+      context.drawImage(element, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/png");
+      if (!/^data:image\/png;base64,/i.test(dataUrl) || dataUrl.length > 4_000_000) return null;
+      return {
+        data_url: dataUrl,
+        method: "visible_pixels_png",
+        note: `Captured displayed ${tag === "canvas" ? "canvas" : "image"} pixels in the foreground DOM; no remote fetch was used.`,
+      };
+    } catch {
+      // A cross-origin image without a readable CORS response taints the canvas.
+      // Keep the visible URL or placeholder as provenance instead of attempting a network read.
       return null;
     }
   };
@@ -100,6 +131,8 @@ async function capture(options = {}) {
   const requestedScroll = options && (options.scroll === "older" || options.scroll === "newer") ? options.scroll : null;
   const walkDirection = options && (options.walk === "older" || options.walk === "newer") ? options.walk : null;
   const requestedMaxSteps = Number(options?.max_steps);
+  const requestedSettleMs = Number(options?.settle_ms);
+  const settleMs = Number.isFinite(requestedSettleMs) ? Math.min(Math.max(Math.floor(requestedSettleMs), 75), 500) : 180;
   const maxSteps = walkDirection
     ? Math.min(Math.max(Number.isFinite(requestedMaxSteps) ? Math.floor(requestedMaxSteps) : 40, 1), 80)
     : requestedScroll ? 1 : 0;
@@ -108,6 +141,13 @@ async function capture(options = {}) {
     const walkOptions = { ...options, walk: null, max_steps: undefined };
     const captures = [await capture({ ...walkOptions, scroll: null })];
     let stopReason = "max_steps";
+    let unchangedWindowSteps = 0;
+    const renderedWindowSignature = (range) => JSON.stringify({
+      message_ids: Array.isArray(range?.message_ids) ? range.message_ids : [],
+      oldest_message_id: range?.oldest_message_id || null,
+      newest_message_id: range?.newest_message_id || null,
+      rendered_count: Number(range?.rendered_count || 0),
+    });
     for (let step = 0; step < maxSteps; step += 1) {
       const currentRange = captures[captures.length - 1]?.metadata?.capture_range || {};
       if (walkDirection === "older" ? currentRange.at_start : currentRange.at_end) {
@@ -123,6 +163,12 @@ async function capture(options = {}) {
       }
       if (!nextRange.scroll_action?.moved) {
         stopReason = "no_scroll_progress";
+        break;
+      }
+      if (renderedWindowSignature(currentRange) === renderedWindowSignature(nextRange)) unchangedWindowSteps += 1;
+      else unchangedWindowSteps = 0;
+      if (unchangedWindowSteps >= 2) {
+        stopReason = "rendered_window_unchanged";
         break;
       }
     }
@@ -158,8 +204,14 @@ async function capture(options = {}) {
     const rangeSummaries = [];
     const selectorNotes = new Set();
     let skippedWithoutTimestamp = 0;
+    let previousRangeSignature = null;
+    let unchangedRangeRun = 0;
     captures.forEach((result, rangeIndex) => {
       const captureRange = result.metadata?.capture_range || {};
+      const messageIds = (result.messages || []).map((message) => message.id).filter(Boolean);
+      const signature = renderedWindowSignature({ ...captureRange, message_ids: messageIds });
+      const renderedWindowChanged = previousRangeSignature === null ? null : signature !== previousRangeSignature;
+      unchangedRangeRun = renderedWindowChanged === false ? unchangedRangeRun + 1 : 0;
       rangeSummaries.push({
         range_index: rangeIndex,
         captured_at: result.metadata?.captured_at || null,
@@ -176,8 +228,11 @@ async function capture(options = {}) {
         at_end: Boolean(captureRange.at_end),
         scroll_action: captureRange.scroll_action || null,
         selector: captureRange.selector || null,
-        message_ids: (result.messages || []).map((message) => message.id).filter(Boolean),
+        message_ids: messageIds,
+        rendered_window_changed: renderedWindowChanged,
+        unchanged_window_steps: unchangedRangeRun,
       });
+      previousRangeSignature = signature;
       skippedWithoutTimestamp = Math.max(skippedWithoutTimestamp, Number(captureRange.skipped_without_timestamp || 0));
       (result.metadata?.selector_notes || []).forEach((note) => selectorNotes.add(note));
       (result.participants || []).forEach((participant) => {
@@ -195,7 +250,9 @@ async function capture(options = {}) {
     const last = captures[captures.length - 1];
     const selectorNoteList = [...selectorNotes];
     const walkNote = `The user explicitly triggered a foreground ${walkDirection} walk; ${captures.length - 1} bounded step(s) were executed and the walk stopped at ${stopReason}.`;
-    const rangeKeys = rangeSummaries.map((range) => `${range.oldest_message_id || ""}|${range.newest_message_id || ""}|${range.rendered_count}`);
+    const rangeKeys = rangeSummaries.map((range) => Array.isArray(range.message_ids) && range.message_ids.length
+      ? range.message_ids.join("\u001f")
+      : `${range.oldest_message_id || ""}|${range.newest_message_id || ""}|${range.rendered_count}`);
     const uniqueRangeCount = new Set(rangeKeys).size;
     const repeatedRangeCount = rangeSummaries.length - uniqueRangeCount;
     const repeatedRangeNote = repeatedRangeCount
@@ -232,6 +289,8 @@ async function capture(options = {}) {
         repeated_ranges: repeatedRangeCount,
         stopped_reason: stopReason,
         reached_boundary: stopReason === (walkDirection === "older" ? "oldest_boundary" : "newest_boundary"),
+        unchanged_window_steps: unchangedWindowSteps,
+        settle_ms: settleMs,
       },
     };
     return {
@@ -363,14 +422,14 @@ async function capture(options = {}) {
         throw new Error("The visible message scroller exposes no read-only-safe scroll method.");
       }
       await new Promise((resolve) => {
-        setTimeout(resolve, 75);
+        setTimeout(resolve, settleMs);
       });
       scrollAction.moved = Number(messageScroller.scrollTop || 0) !== scrollTop;
       if (!scrollAction.moved && scrollAction.method === "scrollBy" && typeof messageScroller.scrollTo === "function") {
         messageScroller.scrollTo({ top: targetScrollTop, left: 0, behavior: "auto" });
         scrollAction.method = "scrollTo_fallback";
         await new Promise((resolve) => {
-          setTimeout(resolve, 75);
+          setTimeout(resolve, settleMs);
         });
         scrollAction.moved = Number(messageScroller.scrollTop || 0) !== scrollTop;
       }
@@ -396,6 +455,7 @@ async function capture(options = {}) {
 
   const participants = new Map();
   const messages = [];
+  const generatedMessageOccurrences = new Map();
   let skippedWithoutTimestamp = 0;
   const selectorNotes = [
     `Selected visible row candidate: ${usedSelector}.`,
@@ -476,10 +536,13 @@ async function capture(options = {}) {
     }
 
     const sourceId = row.getAttribute("data-message-id") || row.getAttribute("data-item-id") || row.id?.match(/(?:message|chat)[-_]([A-Za-z0-9_-]+)/i)?.[1] || null;
-    const messageId = sourceId || `local-${hashText(`${timestamp}|${authorId}|${content}`)}`;
+    const generatedBaseId = `local-${hashText(`${timestamp}|${authorId}|${content}`)}`;
+    const generatedOccurrence = (generatedMessageOccurrences.get(generatedBaseId) || 0) + 1;
+    generatedMessageOccurrences.set(generatedBaseId, generatedOccurrence);
+    const messageId = sourceId || `${generatedBaseId}${generatedOccurrence > 1 ? `-${generatedOccurrence}` : ""}`;
     const media = [];
     const mediaSeen = new Set();
-    for (const element of row.querySelectorAll("img[src], img[srcset], img[data-src], img[data-original], video[src], video[poster], video[data-src], audio[src], audio[data-src], source[src]")) {
+    for (const element of row.querySelectorAll("img[src], img[srcset], img[data-src], img[data-original], canvas[data-bitmoji], canvas[data-sticker], canvas[aria-label*='bitmoji' i], canvas[aria-label*='sticker' i], canvas[class*='bitmoji' i], canvas[class*='sticker' i], video[src], video[poster], video[data-src], audio[src], audio[data-src], source[src]")) {
       const mediaContainer = element.closest("video, audio");
       if (element === avatarElement || element.closest("[aria-hidden='true']") || !(isVisible(element) || (mediaContainer && isVisible(mediaContainer)))) continue;
       const descriptor = mediaDescriptor(element);
@@ -495,7 +558,7 @@ async function capture(options = {}) {
       mediaSeen.add(key);
       const detectedKind = tag === "video" ? "video" : tag === "audio" ? "audio" : mediaKind(reference, descriptor);
       const item = {
-        kind: detectedKind === "unknown" && tag === "img" ? "image" : detectedKind,
+        kind: detectedKind === "unknown" && (tag === "img" || tag === "canvas") ? "image" : detectedKind,
         label: label || "Media",
         placeholder: /bitmoji/i.test(descriptor) ? "Bitmoji visible in source; bytes were not captured." : "Media visible in source; bytes were not captured.",
         source_element: tag,
@@ -505,11 +568,18 @@ async function capture(options = {}) {
       if (element.getAttribute("alt")) item.alt = clean(element.getAttribute("alt"));
       if (width) item.width = width;
       if (height) item.height = height;
+      const pixelCapture = captureVisibleMedia(element);
+      if (pixelCapture) {
+        item.media_data_url = pixelCapture.data_url;
+        item.media_capture_method = pixelCapture.method;
+        item.media_capture_note = pixelCapture.note;
+        item.placeholder = "Displayed media pixels captured locally; no remote fetch was used.";
+      }
       media.push(item);
     }
     for (const element of row.querySelectorAll("[data-bitmoji], [data-sticker], [aria-label*='bitmoji' i], [aria-label*='sticker' i], [class*='bitmoji' i], [class*='sticker' i]")) {
       if (!isVisible(element) || element.closest("[aria-hidden='true']")) continue;
-      if (element.querySelector("img[src], img[srcset], img[data-src], img[data-original], video[src], video[data-src], audio[src], audio[data-src]")) continue;
+      if (element.querySelector("img[src], img[srcset], img[data-src], img[data-original], canvas[data-bitmoji], canvas[data-sticker], canvas[aria-label*='bitmoji' i], canvas[aria-label*='sticker' i], video[src], video[data-src], audio[src], audio[data-src]")) continue;
       const descriptor = mediaDescriptor(element);
       const reference = mediaReference(element);
       const label = clean(element.getAttribute("aria-label") || element.getAttribute("data-label") || (descriptor.match(/bitmoji|sticker/i)?.[0]) || "Sticker");
@@ -559,6 +629,7 @@ async function capture(options = {}) {
         visible_dom: true,
       },
     };
+    if (!sourceId && generatedOccurrence > 1) message.provenance.generated_id_collision_index = generatedOccurrence;
     if (savedState) message.saved_state = savedState;
     if (retention) message.retention = retention;
     messages.push(message);
@@ -585,6 +656,8 @@ async function capture(options = {}) {
     oldest_timestamp: oldest.timestamp,
     newest_message_id: newest.id,
     newest_timestamp: newest.timestamp,
+    message_ids: messages.map((message) => message.id).filter(Boolean),
+    scroll_settle_ms: settleMs,
     ...scrollPosition,
     selector: usedSelector,
     selector_notes: selectorNotes,
@@ -613,7 +686,7 @@ async function capture(options = {}) {
             ? `The user explicitly triggered one foreground ${requestedScroll} scroll step; no follow-up scroll, navigation, or expansion was scheduled.`
             : "No scroll action was requested; the adapter did not navigate, scroll, or expand the open chat.",
           `Capture range: ${messages.length} rendered row(s), ${scrollPosition.at_start ? "at the oldest boundary" : "not at the oldest boundary"}, ${scrollPosition.at_end ? "at the newest boundary" : "not at the newest boundary"}; scroll moved: ${scrollAction.moved ? "yes" : "no"}.`,
-           "Visible text, image/sticker/Bitmoji placeholders, user metadata, saved-state/retention indicators, and visible source references are preserved separately.",
+           "Visible text, image/sticker/Bitmoji evidence, user metadata, saved-state/retention indicators, and visible source references are preserved separately; readable image or canvas pixels may be supplied as bounded local data for import.",
            "Participant avatar bytes are captured only from already-rendered readable pixels when the page permits it; remote-only avatar references remain provenance-only.",
           "This is a range capture, not a claim that the entire conversation is present.",
         ],
@@ -622,4 +695,10 @@ async function capture(options = {}) {
     participants: Array.from(participants.values()),
     messages,
   };
+}
+
+const captureHost = typeof window !== "undefined" ? window : typeof globalThis !== "undefined" ? globalThis : null;
+if (captureHost && Object.isExtensible(captureHost)) {
+  captureHost.CatchThatCapture = captureHost.CatchThatCapture || {};
+  captureHost.CatchThatCapture.captureVisibleChat = capture;
 }

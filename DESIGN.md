@@ -41,11 +41,12 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
 - Provenance is a first-class drawer: source URL/reference, capture range, raw
   UTC timestamp, IDs, and visible-vs-placeholder distinctions remain one
   click away without interrupting transcript reading.
-- Capture affordance: each explicit `older`/`newer` action advances one bounded
-  visible-DOM range; an explicit walk composes those steps in the foreground
-  until a boundary, no-progress result, or cap. The reader presents direction,
-  movement, ranges, and stop state as a coverage ledger, never as a complete-chat
-  claim.
+- Capture affordance: the live helper presents visible `Capture current`, `Walk
+  older`, and `Walk newer` actions for the currently open chat. Each action
+  advances one bounded visible-DOM range or composes those steps in the
+  foreground until a boundary, no-progress result, unchanged rendered window,
+  or cap. The reader presents direction, movement, ranges, and stop state as a
+  coverage ledger, never as a complete-chat claim.
 - Motion is limited to short state transitions and disabled for reduced-motion
   users. Print switches to high-contrast paper output and expands the selected
   filtered view.

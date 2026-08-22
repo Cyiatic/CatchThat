@@ -57,6 +57,21 @@ python -m catchthat build `
   --output private-data\capture-001-view
 ```
 
+For the common post-capture path, `capture-result` performs the import and
+can build the viewer and readable text export together:
+
+```powershell
+python -m catchthat capture-result `
+  --input private-data\capture-001.json `
+  --output private-data\capture-001.archive.json `
+  --build-output private-data\capture-001-view `
+  --text-output private-data\capture-001.txt
+```
+
+This command processes a saved result; it does not open a browser or capture
+without the user explicitly running the adapter in the read-only evaluate
+surface.
+
 `import-transcript` is an alias for `import-capture`; it also accepts a bare
 message array. Each imported message keeps its source filename and record
 index, and absolute paths are omitted from the normalized archive.
@@ -66,16 +81,23 @@ index, and absolute paths are omitted from the normalized archive.
 1. Open Snapchat Web in the Codex in-app browser and open the intended chat
    yourself. Do not ask CatchThat to log in, search for a friend, or navigate
    to a chat.
-2. Run `tools/snapchat_visible_capture.js` once with no options for the current
-   rendered range. For one attended foreground walk without manual scrolling,
-   pass `{walk: "older", max_steps: 40}` (or `newer`). It advances one bounded
-   viewport step at a time, merges each rendered range, and stops at a boundary,
-   no-progress result, or the step cap. It never starts a background job.
-   `{scroll: "older"}` and `{scroll: "newer"}` remain available for one-step
-   runs.
-3. Pass the adapter to the in-app browser’s read-only evaluate surface. It
-   returns a JSON object; save each result as `private-data\range-001.json`,
-   `range-002.json`, and so on.
+2. On a writable evaluate surface, evaluate
+   `tools/snapchat_visible_capture.js` once, then evaluate
+   `tools/snapchat_capture_controls.js` in the same tab. This installs a
+   visible CatchThat panel with `Capture current`, `Walk older`, and `Walk
+   newer` buttons. Each click is user-triggered and bounded; it reads only the
+   current rendered chat window. The result stays in the panel and in
+   `CatchThatCapture.lastResult` for local saving. If the browser exposes only
+   a read-only/frozen evaluate surface, run the adapter and invoke its local
+   `capture({walk: "older", max_steps: 40})` function in one explicit async
+   evaluation instead; do not attempt to create a panel or bypass that limit.
+3. For direct evaluation without the panel, call the adapter with no options
+   for the current range, `{scroll: "older"}`/`{scroll: "newer"}` for one
+   bounded step, or `{walk: "older", max_steps: 40}` (or `newer`) for an
+   attended foreground walk. It waits for the visible DOM to settle and stops
+   at a boundary, no-progress result, unchanged rendered window, or the step
+   cap; it never starts a background job. Save each returned JSON object as
+   `private-data\range-001.json`, `range-002.json`, and so on.
 4. Review the returned `metadata.source.notes`, `metadata.thread_identity`,
    `metadata.capture_range`, `selector_notes`, and the message count before
    importing.
@@ -165,17 +187,21 @@ The normalized schema is versioned and intentionally explicit:
 alt text, dimensions, source element, and either a safe local `path` or an
 HTTP(S) `source_url`. Local supplied assets are displayed in the offline
 viewer; remote message references remain provenance-only and are never fetched
-by CatchThat. When readable avatar pixels were available in the foreground DOM,
-`import-capture` materializes them under `assets/avatars/` and records
-`avatar_provenance`; otherwise `avatar_ref` remains reference-only. Participant
-`visible_profile` fields contain only metadata exposed in the captured DOM (for
-example a handle, status, label, or source ID).
+by CatchThat. When a rendered message `img` or Bitmoji/sticker canvas can be
+read as visible pixels, the adapter supplies a bounded PNG data URL and
+`import-capture` materializes it under `assets/media/`, records
+`media_provenance`, then removes the data URL from normalized JSON. Video/audio
+and cross-origin or otherwise unreadable media remain explicit placeholders or
+references. The same rule applies to participant avatars under
+`assets/avatars/` with `avatar_provenance`; otherwise `avatar_ref` remains
+reference-only. Participant `visible_profile` fields contain only metadata
+exposed in the captured DOM (for example a handle, status, label, or source ID).
 
 ## Current status
 
 The fixture, validator, importer, range merge/coverage verifier, attended
-capture adapter, test suite, and offline viewer are included. The current
-signed-in Aiden Lautt smoke test confirms the selectors and bounded foreground
-walk on this layout, while repeated message boundaries leave additional
-history/loading behavior unverified. The project does not store live data in the
-repository.
+capture adapter, test suite, offline viewer, and GitHub Actions smoke build are
+included. The current signed-in Aiden Lautt smoke test confirms the selectors
+and bounded foreground walk on this layout, while repeated message boundaries
+leave additional history/loading behavior unverified. The project does not
+store live data in the repository.

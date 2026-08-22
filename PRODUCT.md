@@ -38,7 +38,7 @@ service-independent.
 - A capture run may perform one bounded `older` or `newer` scroll step, or a
   user-triggered bounded walk made from those steps, when explicitly requested.
   There is no background loop: the visible result reports the direction, step
-  cap, ranges, movement, and boundary/no-progress stop reason.
+  cap, ranges, movement, and boundary/no-progress/unchanged-window stop reason.
 - The web app may virtualize history, so captures are range-based and may be
   partial. The user can capture overlapping ranges and merge them later.
 - Real chat archives and raw captures are private data and stay under ignored
@@ -69,7 +69,9 @@ service-independent.
   rendered during that foreground invocation; it never claims to load or verify
   unseen history by itself.
 - Visible media is represented by safe local supplied assets or reference-only
-  placeholders; the adapter never downloads remote media bytes.
+  placeholders; the adapter never downloads remote media bytes. Already-rendered
+  `img`/Bitmoji canvas pixels may be copied into a bounded data URL for local
+  import, then materialized under the archive output.
 - A complete archive claim is out of scope unless the overlap chain and
   boundaries justify `verified`; a verified rendered-range chain still cannot
   prove unseen or deleted messages.
@@ -88,10 +90,12 @@ The kickoff brief supplies the desired readable unit:
     Person A: message 1
     Person B: message 2
 
-No real conversation, production asset, or validated Snapchat Web DOM sample
-was supplied. The repository therefore uses synthetic fixtures and labels
-selector assumptions until one signed-in, user-opened chat is available for a
-smoke test.
+Synthetic fixtures remain the committed source of truth. Private signed-in
+Rick Bailer and Aiden Lautt smoke runs supplied local evidence for the current
+selector candidates, author metadata, visible media references, avatar-pixel
+path, and bounded scroll behavior. They do not establish a stable Snapchat DOM
+contract or prove unseen history; the live selector uncertainty and the exact
+next smoke step remain documented in `docs/live-smoke-test.md`.
 
 ## Product Principles
 
