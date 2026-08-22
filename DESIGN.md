@@ -1,11 +1,11 @@
 # Design direction: CatchThat Offline Reader
 
 <!--
-THESIS: Make a captured chat feel like a familiar Snapchat Web conversation while refusing the live-client illusion.
-OWN-WORLD: Near-black conversation surfaces, white type, ghost-yellow identity signals, cyan/coral message rails, compact source labels, and evidence-forward archive controls.
+THESIS: Make a captured chat feel native to Snapchat Web without pretending it is live.
+OWN-WORLD: Near-black chrome, a dense chat list, compact bubble rows, ghost-yellow identity signals, and a quiet evidence drawer.
 STORY: The reader knows which chat is open, what range was observed, who spoke, and which evidence survives; they can search, inspect, and print without sending anything.
-FIRST VIEWPORT: A Snapchat-like dark chat rail, a bright readable transcript, and a provenance panel establish local-only status, partial coverage, and the first rows immediately.
-FORM: Operate/Read three-column archive reader; row selection is the signature interaction, with deep-linkable messages and a coverage ledger alongside the transcript.
+FIRST VIEWPORT: The selected chat, newest captured messages, read-only capture bar, and partial-range state appear in one familiar two-pane shell.
+FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance drawer; row selection remains the signature interaction and deep links remain stable.
 -->
 
 ## Durable visual rules
@@ -18,22 +18,41 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
   Yellow is never the only coverage signal.
 - Typography: system sans for the reader and messages; a compact monospace
   stack for IDs, timestamps, and provenance. No remote font dependency.
-- Layout: responsive three-column Snapchat-like shell on desktop; the archive
-  rail and provenance panel collapse above/below the transcript on narrow
-  screens. The transcript is the largest region and stays visually calm.
-- Message rows are compact dark conversation blocks with a small avatar, a
-  speaker label, timestamp, stable deep link, content kind, and optional
-  evidence badges addressable. They resemble chat rows without creating a
-  sendable message composer.
-- Provenance is a first-class side panel: source URL/reference, capture range,
-  raw UTC timestamp, IDs, and visible-vs-placeholder distinctions remain one
-  click away.
+- Layout: responsive Snapchat Web-style two-pane shell on desktop; the chat
+  list carries product identity, local/read-only status, search, and author
+  filters, while the transcript owns the largest region. Provenance is a
+  right-side inspector drawer opened from the transcript header rather than a
+  permanent report column.
+- Product identity: CatchThat’s ghost-yellow ghost-catcher mark and product name
+  sit above the archive chat list; the same mark is the offline favicon. The
+  sidebar footer keeps the local/read-only boundary visible after the
+  navigation rail is removed.
+- Message visibility: the closed author control is one compact “All authors”
+  disclosure, not a list of conversations. Its open menu contains independent
+  multi-select message-visibility toggles, using the captured participant
+  avatar/Bitmoji when a local asset exists and honest initials/reference
+  metadata otherwise. Readable avatar pixels captured from the visible DOM are
+  materialized as local assets during import; reference-only states remain
+  explicit in provenance.
+- Message rows are compact dark bubble clusters with cyan/coral speaker rails,
+  a colored author label, timestamp, stable deep link, content kind,
+  image/sticker/Bitmoji preview or reference card, and optional evidence
+  badges. The bottom composer is a visual read-only status bar, never an input.
+- Provenance is a first-class drawer: source URL/reference, capture range, raw
+  UTC timestamp, IDs, and visible-vs-placeholder distinctions remain one
+  click away without interrupting transcript reading.
 - Capture affordance: each explicit `older`/`newer` action advances one bounded
-  visible-DOM range and returns its scroll movement and boundary state. The
-  reader presents that state as a coverage ledger, never as an automatic crawl.
+  visible-DOM range; an explicit walk composes those steps in the foreground
+  until a boundary, no-progress result, or cap. The reader presents direction,
+  movement, ranges, and stop state as a coverage ledger, never as a complete-chat
+  claim.
 - Motion is limited to short state transitions and disabled for reduced-motion
   users. Print switches to high-contrast paper output and expands the selected
   filtered view.
+- Iconography: local inline SVG system icons are used for coverage status,
+  timestamp mode, printing, filters, and evidence. Icon-only actions retain
+  visible focus, an accessible action label, and a title tooltip; icon size is
+  kept around the 18–20px system-icon scale.
 
 ## Settled implementation tokens
 
@@ -42,8 +61,8 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
 - `--text: #f5f5f5`, `--muted: #b5b6ba`, `--cyan: #35c7ff`,
   `--coral: #ff477e`, and `--green: #7be495` support readable evidence and
   speaker/state labels.
-- Radius is restrained (8–14px), shadows are soft and sparse, and layout
-  spacing follows an 8px rhythm. Yellow is reserved for identity, focus, and
-  selected archive state.
+- Radius is restrained (8–20px for Snapchat-like pills), shadows are soft and
+  sparse, and layout spacing follows an 8px rhythm. Yellow is reserved for
+  identity, focus, selected archive state, and the read-only boundary.
 - The viewer emits `index.html`, `app.js`, `archive.json`, `manifest.json`,
   and any referenced local assets. It has no runtime network dependency.

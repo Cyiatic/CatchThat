@@ -16,9 +16,10 @@ user opened. Each user-triggered run may perform one bounded `older` or `newer`
 scroll step; the user remains in control of every action and expansion.
 CatchThat never automates login or friend actions, searches arbitrary accounts,
 sends messages, inspects cookies/browser stores/tokens/passwords, calls private APIs,
-uses fetch/XHR/WebSocket, downloads media, crawls in the background, or hides
-capture behavior. Remote media is recorded as a reference or placeholder; it
-is never fetched by the project.
+uses fetch/XHR/WebSocket, downloads remote media, crawls in the background, or
+hides capture behavior. A displayed participant avatar may be copied from
+already-rendered readable pixels into a bounded local asset; cross-origin or
+blob-only avatars remain references and are never fetched by the project.
 
 Real captures belong under `private-data/`, which is ignored by Git. Treat the
 archive as sensitive even though the viewer is offline.
@@ -66,10 +67,12 @@ index, and absolute paths are omitted from the normalized archive.
    yourself. Do not ask CatchThat to log in, search for a friend, or navigate
    to a chat.
 2. Run `tools/snapchat_visible_capture.js` once with no options for the current
-   rendered range. For more history, run it again with exactly one explicit
-   `{scroll: "older"}` or `{scroll: "newer"}` option. Each invocation moves the
-   currently open message scroller by at most one bounded viewport step, then
-   captures the resulting visible DOM. It never schedules a follow-up step.
+   rendered range. For one attended foreground walk without manual scrolling,
+   pass `{walk: "older", max_steps: 40}` (or `newer`). It advances one bounded
+   viewport step at a time, merges each rendered range, and stops at a boundary,
+   no-progress result, or the step cap. It never starts a background job.
+   `{scroll: "older"}` and `{scroll: "newer"}` remain available for one-step
+   runs.
 3. Pass the adapter to the in-app browser’s read-only evaluate surface. It
    returns a JSON object; save each result as `private-data\range-001.json`,
    `range-002.json`, and so on.
@@ -81,9 +84,11 @@ index, and absolute paths are omitted from the normalized archive.
 
 The adapter records the sanitized current URL/path and thread heading, oldest
 and newest rendered message IDs/timestamps, rendered count, scroll metrics,
-boundary flags, the requested scroll direction and movement, capture time,
-selector notes, and source notes. It never claims a complete chat from one
-rendered window. See
+boundary flags, the requested scroll direction and movement, walk step/range
+metadata including per-range message IDs, capture time, selector notes, and
+source notes. Repeated rendered boundaries are retained as a DOM evidence note;
+coverage still depends on observed boundaries and linked ranges, and never
+claims unseen or deleted history. See
 `docs/live-smoke-test.md` for the exact next validation step and selector
 uncertainty.
 
@@ -138,7 +143,11 @@ The normalized schema is versioned and intentionally explicit:
       "notes": ["Visible DOM only; partial coverage is explicit."]
     }
   },
-  "participants": [{"id": "mara", "display_name": "Mara"}],
+  "participants": [{
+    "id": "mara",
+    "display_name": "Mara",
+    "visible_profile": {"handle": "mara", "status": "Active", "source_id": "user-mara"}
+  }],
   "messages": [{
     "id": "snap-001",
     "author_id": "mara",
@@ -152,12 +161,21 @@ The normalized schema is versioned and intentionally explicit:
 }
 ```
 
-`media` entries are placeholders or already-supplied local files; HTTP(S)
-references remain provenance and do not become runtime dependencies.
+`media` entries preserve the visible kind, optional Bitmoji/sticker subtype,
+alt text, dimensions, source element, and either a safe local `path` or an
+HTTP(S) `source_url`. Local supplied assets are displayed in the offline
+viewer; remote message references remain provenance-only and are never fetched
+by CatchThat. When readable avatar pixels were available in the foreground DOM,
+`import-capture` materializes them under `assets/avatars/` and records
+`avatar_provenance`; otherwise `avatar_ref` remains reference-only. Participant
+`visible_profile` fields contain only metadata exposed in the captured DOM (for
+example a handle, status, label, or source ID).
 
 ## Current status
 
 The fixture, validator, importer, range merge/coverage verifier, attended
-capture adapter, test suite, and offline viewer are included. Live Snapchat
-selector certainty is intentionally pending one signed-in, user-opened chat;
-the project does not store live data in the repository.
+capture adapter, test suite, and offline viewer are included. The current
+signed-in Aiden Lautt smoke test confirms the selectors and bounded foreground
+walk on this layout, while repeated message boundaries leave additional
+history/loading behavior unverified. The project does not store live data in the
+repository.

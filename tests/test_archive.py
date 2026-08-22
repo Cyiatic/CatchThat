@@ -45,6 +45,8 @@ class ArchiveTests(unittest.TestCase):
             for name in ("index.html", "app.js", "archive.json", "manifest.json"):
                 self.assertTrue((output / name).is_file())
             self.assertTrue((output / "assets" / "avatars" / "mara.svg").is_file())
+            self.assertTrue((output / "assets" / "media" / "recipe-screenshot.svg").is_file())
+            self.assertTrue((output / "assets" / "media" / "bitmoji-wave.svg").is_file())
             html = (output / "index.html").read_text(encoding="utf-8")
             app = (output / "app.js").read_text(encoding="utf-8")
             self.assertIn("CatchThat", html)
@@ -55,6 +57,13 @@ class ArchiveTests(unittest.TestCase):
             self.assertIn("This is not the whole conversation", app)
             self.assertIn("searchTextById", app)
             self.assertIn("windowSize = 240", app)
+            self.assertIn('data-action="edge"', html)
+            self.assertIn("Scroll to Top", html)
+            self.assertIn("All ${filtered.length} captured rows", app)
+            self.assertIn("scrollToNewest", app)
+            self.assertIn("renderParticipantProfile", app)
+            self.assertIn("media-card", app)
+            self.assertIn("visible_profile", app)
             self.assertIn("Source & provenance", html)
             self.assertNotIn("cdn.jsdelivr.net", html)
             self.assertEqual(verify_build(output), [])
@@ -115,14 +124,22 @@ class ArchiveTests(unittest.TestCase):
                                 "notes": ["Provided by the archive owner."],
                             },
                         },
-                        "participants": [{"id": "mara", "display_name": "Mara", "avatar_path": "assets/avatars/mara.svg"}],
+                "participants": [{
+                    "id": "mara",
+                    "display_name": "Mara",
+                    "avatar_path": "assets/avatars/mara.svg",
+                    "visible_profile": {"handle": "mara", "status": "Active", "source_id": "user-mara"},
+                }],
                         "messages": [
                             {
                                 "id": "m-1",
                                 "author_id": "mara",
                                 "timestamp": "2024-01-01T00:00:00Z",
                                 "content": "Visible text",
-                                "media": [{"kind": "image", "label": "photo.svg", "path": "assets/images/photo.svg"}],
+                                "media": [
+                                    {"kind": "image", "label": "photo.svg", "path": "assets/images/photo.svg"},
+                                    {"kind": "bitmoji", "label": "Bitmoji wave", "url": "https://example.invalid/bitmoji.webp", "alt": "Visible Bitmoji"},
+                                ],
                                 "saved_state": "Saved in chat",
                                 "retention": "View once",
                                 "source_refs": [{"label": "A visible link", "url": "https://example.invalid/source"}],
@@ -141,11 +158,125 @@ class ArchiveTests(unittest.TestCase):
             self.assertEqual(message["saved_state"]["state"], "saved")
             self.assertEqual(message["retention"]["state"], "view_once")
             self.assertEqual(message["media"][0]["path"], "assets/images/photo.svg")
+            self.assertEqual(message["media"][1]["kind"], "sticker")
+            self.assertEqual(message["media"][1]["subtype"], "bitmoji")
+            self.assertEqual(archive["participants"][0]["visible_profile"]["status"], "Active")
             self.assertNotIn(str(root), json.dumps(archive))
             built = root / "built"
             self.assertEqual(build_archive(output, built), [])
             self.assertTrue((built / "assets" / "avatars" / "mara.svg").is_file())
             self.assertTrue((built / "assets" / "images" / "photo.svg").is_file())
+
+    def test_import_materializes_visible_avatar_pixels_as_local_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = deepcopy(self.archive)
+            raw["participants"][0].pop("avatar_path", None)
+            raw["participants"][0]["avatar_data_url"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+            raw["participants"][0]["avatar_capture_method"] = "visible_pixels_png"
+            input_path = root / "visible-capture.json"
+            input_path.write_text(json.dumps(raw), encoding="utf-8")
+            output = root / "archive.json"
+
+            archive = import_transcript(input_path, output)
+            participant = archive["participants"][0]
+            self.assertTrue(participant["avatar_path"].startswith("assets/avatars/mara-"))
+            avatar_path = root / participant["avatar_path"]
+            self.assertTrue(avatar_path.is_file())
+            self.assertEqual(avatar_path.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+            self.assertEqual(participant["avatar_provenance"]["method"], "visible_pixels_png")
+            self.assertTrue(participant["avatar_provenance"]["captured"])
+            self.assertNotIn("avatar_data_url", json.dumps(archive))
+            self.assertEqual(validate_archive(archive), [])
+
+            built = root / "built"
+            missing = build_archive(output, built)
+            self.assertIn("assets/avatars/eli.svg", missing)
+            self.assertTrue((built / participant["avatar_path"]).is_file())
+
+    def test_import_tracks_nested_walk_ranges_for_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = deepcopy(self.archive)
+            raw["metadata"].pop("coverage", None)
+            messages = raw["messages"]
+            message_ids = [message["id"] for message in messages]
+            raw["metadata"]["capture_range"] = {
+                "version": 1,
+                "capture_id": "capture-walk",
+                "rendered_count": len(messages),
+                "oldest_message_id": message_ids[0],
+                "oldest_timestamp": messages[0]["timestamp"],
+                "newest_message_id": message_ids[-1],
+                "newest_timestamp": messages[-1]["timestamp"],
+                "at_start": True,
+                "at_end": False,
+                "ranges": [
+                    {
+                        "range_index": 0,
+                        "rendered_count": len(message_ids[3:]),
+                        "oldest_message_id": message_ids[3],
+                        "oldest_timestamp": messages[3]["timestamp"],
+                        "newest_message_id": message_ids[-1],
+                        "newest_timestamp": messages[-1]["timestamp"],
+                        "at_start": False,
+                        "at_end": False,
+                        "message_ids": message_ids[3:],
+                    },
+                    {
+                        "range_index": 1,
+                        "rendered_count": len(message_ids[:4]),
+                        "oldest_message_id": message_ids[0],
+                        "oldest_timestamp": messages[0]["timestamp"],
+                        "newest_message_id": message_ids[3],
+                        "newest_timestamp": messages[3]["timestamp"],
+                        "at_start": True,
+                        "at_end": False,
+                        "message_ids": message_ids[:4],
+                    },
+                ],
+            }
+            input_path = root / "walk.json"
+            input_path.write_text(json.dumps(raw), encoding="utf-8")
+            archive = import_transcript(input_path, root / "archive.json")
+            coverage = archive["metadata"]["coverage"]
+            self.assertEqual(validate_archive(archive), [])
+            self.assertEqual(coverage["range_count"], 2)
+            self.assertEqual(coverage["unique_message_count"], len(messages))
+            self.assertTrue(coverage["start_confirmed"])
+            self.assertFalse(coverage["end_confirmed"])
+            self.assertTrue(coverage["ranges_linked"])
+            self.assertFalse(coverage["complete"])
+            self.assertEqual(verify_transcript_coverage(root / "archive.json"), coverage)
+
+            repeated = deepcopy(raw)
+            repeated_range = repeated["metadata"]["capture_range"]
+            repeated_range["at_start"] = True
+            repeated_range["at_end"] = True
+            for nested in repeated_range["ranges"]:
+                nested.update(
+                    {
+                        "rendered_count": len(message_ids),
+                        "oldest_message_id": message_ids[0],
+                        "oldest_timestamp": messages[0]["timestamp"],
+                        "newest_message_id": message_ids[-1],
+                        "newest_timestamp": messages[-1]["timestamp"],
+                        "at_start": True,
+                        "at_end": True,
+                        "message_ids": message_ids,
+                    }
+                )
+            repeated_input = root / "repeated.json"
+            repeated_input.write_text(json.dumps(repeated), encoding="utf-8")
+            repeated_archive = import_transcript(repeated_input, root / "repeated.archive.json")
+            repeated_coverage = repeated_archive["metadata"]["coverage"]
+            self.assertTrue(repeated_coverage["start_confirmed"])
+            self.assertTrue(repeated_coverage["end_confirmed"])
+            self.assertTrue(repeated_coverage["repeated_boundaries"])
+            self.assertFalse(repeated_coverage["range_boundaries_changed"])
+            self.assertTrue(repeated_coverage["complete"])
+            self.assertEqual(repeated_coverage["status"], "verified")
+            self.assertIn("non-virtualized rendered DOM", " ".join(repeated_coverage["notes"]))
 
     def test_import_infers_author_and_stable_local_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -167,18 +298,36 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("data-message-id", capture_source)
         self.assertIn("selector_notes", capture_source)
         self.assertIn("scroll_height", capture_source)
-        self.assertIn("async (options = {})", capture_source)
+        self.assertIn("async function capture(options = {})", capture_source)
         self.assertIn('options.scroll === "older"', capture_source)
+        self.assertIn('options.walk === "older"', capture_source)
         self.assertIn("scroll_action", capture_source)
+        self.assertIn("scroll_walk", capture_source)
+        self.assertIn("capture_walk_index", capture_source)
         self.assertIn("scopeToConversationScroller", capture_source)
+        self.assertIn("scrollBy", capture_source)
         self.assertIn("scrollTo", capture_source)
+        self.assertIn("scrollTo_fallback", capture_source)
+        self.assertIn("message_ids", capture_source)
+        self.assertIn("repeated_ranges", capture_source)
         self.assertIn("no follow-up scroll", capture_source)
         self.assertIn("visible DOM", capture_source)
         self.assertIn("timestamp-anchored", capture_source)
         self.assertIn("main li", capture_source)
         self.assertIn("[dir='auto']", capture_source)
         self.assertIn("headerAuthor", capture_source)
-        self.assertIn("headerElement || row", capture_source)
+        self.assertIn("mediaDescriptor", capture_source)
+        self.assertIn("captureVisibleAvatar", capture_source)
+        self.assertIn("canvas.toDataURL", capture_source)
+        self.assertIn("avatar_data_url", capture_source)
+        self.assertIn("avatar_capture_method", capture_source)
+        self.assertIn('item.subtype = "bitmoji"', capture_source)
+        self.assertIn("visible_profile", capture_source)
+        self.assertIn("avatar_alt", capture_source)
+        self.assertIn("profileLink", capture_source)
+        self.assertIn("favicon|site[- ]?icon|link[- ]?icon", capture_source)
+        self.assertIn("currentSrc", capture_source)
+        self.assertIn('const headerElement = row.querySelector("header")', capture_source)
         self.assertIn("detectedKind === \"unknown\"", capture_source)
         for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click("):
             self.assertNotIn(forbidden, capture_source)
@@ -245,6 +394,55 @@ class ArchiveTests(unittest.TestCase):
             self.assertEqual([message["id"] for message in load_json(merged_path)["messages"]], ["m1", "m2", "m3"])
             self.assertEqual(verify_transcript_coverage(merged_path)["status"], "verified")
 
+    def test_merge_preserves_complementary_media_and_profile_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base_metadata = {
+                "kind": "snapchat_chat",
+                "title": "Mara",
+                "thread_id": "thread-1",
+                "source": {"url": "https://web.snapchat.com/chat/thread-1"},
+                "capture_range": {
+                    "version": 1,
+                    "rendered_count": 1,
+                    "oldest_message_id": "m1",
+                    "oldest_timestamp": "2024-01-01T00:00:00Z",
+                    "newest_message_id": "m1",
+                    "newest_timestamp": "2024-01-01T00:00:00Z",
+                    "at_start": True,
+                    "at_end": True,
+                },
+            }
+            first = root / "range-001.json"
+            first.write_text(
+                json.dumps(
+                    {
+                        "metadata": base_metadata,
+                        "participants": [{"id": "mara", "display_name": "Mara", "visible_profile": {"handle": "mara"}}],
+                        "messages": [{"id": "m1", "author_id": "mara", "timestamp": "2024-01-01T00:00:00Z", "content": "look", "media": [{"kind": "image", "label": "photo", "source_url": "https://example.invalid/photo"}] }],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            second = root / "range-002.json"
+            second_metadata = deepcopy(base_metadata)
+            second_metadata["source"] = {"url": "https://web.snapchat.com/chat/thread-1"}
+            second.write_text(
+                json.dumps(
+                    {
+                        "metadata": second_metadata,
+                        "participants": [{"id": "mara", "display_name": "Mara", "visible_profile": {"status": "Active", "source_id": "user-mara"}}],
+                        "messages": [{"id": "m1", "author_id": "mara", "timestamp": "2024-01-01T00:00:00Z", "content": "look", "media": [{"kind": "sticker", "subtype": "bitmoji", "label": "wave"}]}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            merged_path = root / "merged.json"
+            merge_transcripts([first, second], merged_path)
+            merged = load_json(merged_path)
+            self.assertEqual(merged["participants"][0]["visible_profile"], {"handle": "mara", "status": "Active", "source_id": "user-mara"})
+            self.assertEqual({item["label"] for item in merged["messages"][0]["media"]}, {"photo", "wave"})
+
     def test_partial_coverage_explains_next_action_and_cli_exit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -283,7 +481,24 @@ class ArchiveTests(unittest.TestCase):
     def test_viewer_preserves_coverage_and_deep_link_affordances(self) -> None:
         template = _template_path().read_text(encoding="utf-8")
         self.assertIn('role="status" aria-live="polite"', template)
+        self.assertIn('role="list" aria-label="Captured messages"', template)
+        self.assertIn('id="selected-message" aria-live="polite"', template)
+        self.assertIn("content-visibility: auto", template)
+        self.assertIn("const state = { query: \"\", authorIds: new Set(participants.keys()), timestampMode: \"local\", windowStart: 0, selected: null, edgeTarget: \"oldest\" }", template)
+        self.assertIn('data-action="toggle-coverage"', template)
+        self.assertIn('class="evidence-button"', template)
+        self.assertIn('data-action="toggle-provenance"', template)
+        self.assertIn('rel="icon"', template)
+        self.assertIn('viewBox="0 0 64 48"', template)
+        self.assertIn('M39 18h12l9 6-9 6H39z', template)
+        self.assertIn('class="rail-product"', template)
+        self.assertIn("filter-toggle", template)
+        self.assertIn('class="author-filter-menu"', template)
+        self.assertIn('id="author-filter-trigger-label"', template)
+        self.assertNotIn("outline: none", template)
         self.assertIn('aria-controls="left-rail"', template)
+        self.assertNotIn('class="topbar"', template)
+        self.assertNotIn('--nav-rail', template)
         self.assertIn('row.setAttribute("aria-current", "true")', template)
         self.assertIn("const selectedIndex = filtered.findIndex", template)
         self.assertIn(".coverage-banner { max-width: none;", template)

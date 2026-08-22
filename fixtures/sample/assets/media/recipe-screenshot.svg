@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160" viewBox="0 0 240 160" role="img" aria-labelledby="title desc">
+  <title id="title">Synthetic recipe screenshot</title>
+  <desc id="desc">A local fixture image showing a yellow recipe card with a bowl illustration.</desc>
+  <rect width="240" height="160" rx="18" fill="#242628"/>
+  <rect x="18" y="18" width="204" height="124" rx="12" fill="#fffc00"/>
+  <circle cx="76" cy="78" r="31" fill="#183248"/>
+  <path d="M49 83h54c-5 22-16 32-27 32S54 105 49 83Z" fill="#f5f7f8"/>
+  <path d="M59 74c4-22 30-22 34 0" fill="none" stroke="#f5f7f8" stroke-width="7" stroke-linecap="round"/>
+  <text x="122" y="67" fill="#183248" font-family="Arial, sans-serif" font-size="15" font-weight="700">Late-night</text>
+  <text x="122" y="88" fill="#183248" font-family="Arial, sans-serif" font-size="15" font-weight="700">ramen</text>
+  <text x="122" y="111" fill="#385266" font-family="monospace" font-size="10">local fixture</text>
+</svg>

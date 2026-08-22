@@ -18,13 +18,19 @@ currently open Snapchat Web chat. It must never:
 - inspect cookies, localStorage, sessionStorage, tokens, passwords, or private
   APIs;
 - call `fetch`, XHR, WebSocket, background jobs, or remote media downloads;
-  - crawl, expand, or discover chats without the user doing it; or
+- crawl, expand, or discover chats without the user doing it; or
 - use stealth behavior to hide capture or evade notifications.
 
+The adapter may copy a displayed participant avatar from already-rendered
+readable pixels into a bounded data URL for local import. It must not fetch a
+remote avatar; if pixels are not readable, preserve only the visible reference
+and say so in provenance.
+
 The user controls which chat is open and explicitly starts each capture action.
-An action may perform one bounded `older` or `newer` scroll step in the
-foreground, then records only visible message rows in the resulting DOM
-window. There is no unattended loop. It must preserve visible text, media
+An action may perform one bounded `older` or `newer` scroll step, or a bounded
+walk made from those steps, in the foreground. It records only visible message
+rows in each resulting DOM window and stops at a boundary, no progress, or a
+step cap. There is no unattended loop. It must preserve visible text, media
 placeholders, saved-state/retention indicators, source references, and capture
 provenance. It must never imply that a rendered range is the whole
 conversation.
@@ -60,7 +66,9 @@ all ranges carry capture metadata, adjacent ranges form an overlap-linked
 chain, both oldest/newest boundaries are observed or explicitly attested, and
 there are no conflicts. Even then, the result means “verified from observed
 rendered ranges”; it cannot prove messages Snapchat failed to render or later
-deleted.
+deleted. If a bounded walk repeats the same oldest/newest message boundaries,
+record that as evidence about the DOM’s rendering strategy; explicit observed
+boundaries and an overlap-linked chain still govern coverage status.
 
 ## Viewer rules
 

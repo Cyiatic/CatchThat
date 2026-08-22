@@ -1,17 +1,18 @@
 <!--
-THESIS: Make a captured chat feel like a familiar Snapchat Web conversation while refusing the live-client illusion.
-OWN-WORLD: Near-black conversation surfaces, white type, ghost-yellow identity signals, cyan/coral message rails, compact source labels, and evidence-forward archive controls.
+THESIS: Make a captured chat feel native to Snapchat Web without pretending it is live.
+OWN-WORLD: Near-black chrome, a dense chat list, compact bubble rows, ghost-yellow identity signals, and a quiet evidence drawer.
 STORY: The reader knows which chat is open, what range was observed, who spoke, and which evidence survives; they can search, inspect, and print without sending anything.
-FIRST VIEWPORT: A Snapchat-like dark chat rail, a bright readable transcript, and a provenance panel establish local-only status, partial coverage, and the first rows immediately.
-FORM: Operate/Read three-column archive reader; row selection is the signature interaction, with deep-linkable messages and a coverage ledger alongside the transcript.
+FIRST VIEWPORT: The selected chat, newest captured messages, read-only capture bar, and partial-range state appear in one familiar two-pane shell.
+FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance drawer; row selection remains the signature interaction and deep links remain stable.
 -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#151617">
+  <meta name="theme-color" content="#0f1011">
   <meta name="referrer" content="no-referrer">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA0OCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjQ4IiByeD0iMTIiIGZpbGw9IiNmZmZjMDAiLz48cGF0aCBkPSJNMTEgMTJoMTljNSAwIDkgNCA5IDl2N2MwIDUtNCA5LTkgOUgxMWMtNCAwLTctMy03LTdWMTljMC00IDMtNyA3LTdaIiBmaWxsPSIjMjAyMTI0IiBzdHJva2U9IiMxMTEiIHN0cm9rZS13aWR0aD0iMyIvPjxjaXJjbGUgY3g9IjIyIiBjeT0iMjQiIHI9IjYiIGZpbGw9IiNmZmZjMDAiIHN0cm9rZT0iIzExMSIgc3Ryb2tlLXdpZHRoPSIyLjUiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjI0IiByPSIyIiBmaWxsPSIjMjAyMTI0Ii8+PHBhdGggZD0iTTM5IDE4aDEybDkgNi05IDZIMzl6IiBmaWxsPSIjZmZmYzAwIiBzdHJva2U9IiMxMTEiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjxwYXRoIGQ9Ik0xNyAzN3Y3aDEwbDQtN000OCAxOHYtNmg3djYiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzExMSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cGF0aCBkPSJNNDYgMjRoNyIgc3Ryb2tlPSIjMjAyMTI0IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==">
   <title>{{ARCHIVE_TITLE}} · CatchThat</title>
   <style>
     :root {
@@ -34,7 +35,7 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       --teal-wash: #e2f2f0;
       --warn: #7a5600;
       --warn-wash: #fff8d9;
-      --shadow: 0 18px 42px rgba(24, 50, 72, .08);
+      --shadow: 0 18px 42px rgba(0, 0, 0, .08);
       --radius: 12px;
       --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -71,50 +72,6 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       border: 0;
     }
 
-    .app-shell { min-height: 100vh; }
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-      min-height: 70px;
-      padding: 12px clamp(18px, 3vw, 42px);
-      border-bottom: 1px solid var(--ink);
-      background: var(--yellow);
-    }
-    .brand { display: flex; align-items: center; gap: 11px; min-width: 205px; }
-    .brand-mark {
-      display: grid;
-      width: 40px;
-      height: 40px;
-      place-items: center;
-      border: 2px solid var(--ink);
-      border-radius: 12px;
-      background: var(--surface);
-      box-shadow: 3px 3px 0 rgba(24, 50, 72, .18);
-    }
-    .brand-mark svg { width: 25px; height: 25px; }
-    .brand-name { font-size: 18px; font-weight: 820; letter-spacing: -.025em; }
-    .brand-subtitle { margin-top: -2px; color: #40510a; font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase; }
-    .topbar-title { min-width: 0; flex: 1; }
-    .topbar-title .kicker { color: #40510a; }
-    .topbar-title strong { display: block; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-    .topbar-actions { display: flex; align-items: center; gap: 8px; }
-    .read-only-badge, .top-action {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      min-height: 38px;
-      padding: 7px 10px;
-      border: 1px solid rgba(24, 50, 72, .48);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .66);
-      color: var(--ink);
-      font-size: 12px;
-      font-weight: 760;
-      white-space: nowrap;
-    }
-    .top-action { display: none; }
     .local-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 3px rgba(11, 107, 115, .15); }
 
     .app-layout {
@@ -122,6 +79,9 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       grid-template-columns: 252px minmax(0, 1fr) 320px;
       min-height: calc(100vh - 70px);
     }
+    .app-layout > .left-rail { grid-column: 1; grid-row: 1; }
+    .app-layout > .reader { grid-column: 2; grid-row: 1; }
+    .app-layout > .provenance-panel { grid-column: 3; grid-row: 1; }
     .left-rail, .provenance-panel { min-width: 0; background: var(--panel); }
     .left-rail { padding: 24px 17px; border-right: 1px solid var(--line-strong); }
     .provenance-panel { padding: 25px 20px; border-left: 1px solid var(--line-strong); }
@@ -143,22 +103,6 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     .filter-section { padding-top: 22px; }
     .filter-section h2 { margin: 0 0 8px; color: var(--muted); font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
     .filter-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
-    .filter-button {
-      display: flex;
-      align-items: center;
-      width: 100%;
-      gap: 9px;
-      min-height: 44px;
-      padding: 8px 9px;
-      border: 1px solid transparent;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--ink-soft);
-      text-align: left;
-      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
-    }
-    .filter-button:hover { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
-    .filter-button[aria-pressed="true"] { border-color: var(--ink); background: var(--yellow); color: var(--ink); font-weight: 800; }
     .filter-avatar { width: 24px; height: 24px; flex: 0 0 auto; border-radius: 7px; object-fit: cover; background: var(--panel-deep); }
     .filter-initials { display: grid; place-items: center; color: var(--teal); font-family: var(--mono); font-size: 9px; font-weight: 800; }
     .filter-count { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 10px; }
@@ -182,12 +126,12 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       font-size: 12px;
       font-weight: 720;
     }
-    .select-control:focus, .search-input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(11, 107, 115, .12); outline: none; }
+    .select-control:focus-visible, .search-input:focus-visible { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(11, 107, 115, .12); }
     .print-button { border-color: var(--ink); background: var(--ink); color: var(--surface); }
     .print-button:hover { background: var(--teal); }
     .search-row { display: flex; align-items: center; gap: 10px; max-width: 980px; margin: 0 auto 16px; }
     .search-wrap { position: relative; min-width: 0; flex: 1; }
-    .search-input { width: 100%; min-height: 44px; padding: 9px 72px 9px 38px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); outline: none; }
+    .search-input { width: 100%; min-height: 44px; padding: 9px 72px 9px 38px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); }
     .search-input::placeholder { color: var(--muted); }
     .search-icon { position: absolute; top: 10px; left: 13px; color: var(--muted); font-family: var(--mono); pointer-events: none; }
     .search-hint { position: absolute; top: 8px; right: 10px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--mono); font-size: 10px; pointer-events: none; }
@@ -210,12 +154,12 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
 
     .transcript-frame { max-width: 980px; margin: 0 auto; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
     .transcript-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: #fbfcfc; }
-    .transcript-heading strong { font-size: 13px; }
+    .transcript-heading h2 { margin: 0; font-size: 13px; }
     .transcript-heading span { color: var(--muted); font-family: var(--mono); font-size: 10px; }
     .message-list { min-height: 260px; }
     .date-divider { display: flex; align-items: center; gap: 12px; padding: 17px 18px 8px; color: var(--muted); font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .date-divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
-    .message-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 11px; padding: 14px 18px; border-bottom: 1px solid var(--line); scroll-margin: 20px; transition: background 150ms ease, box-shadow 150ms ease; }
+    .message-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 11px; padding: 14px 18px; border-bottom: 1px solid var(--line); scroll-margin: 20px; content-visibility: auto; contain-intrinsic-size: 0 96px; transition: background 150ms ease, box-shadow 150ms ease; }
     .message-row:hover { background: #fbfcfc; }
     .message-row:focus-visible { position: relative; z-index: 1; }
     .message-row.is-selected { background: var(--yellow-wash); box-shadow: inset 0 -2px 0 var(--yellow); }
@@ -235,13 +179,35 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     .evidence-badge.saved { background: var(--teal-wash); color: var(--teal); }
     .evidence-badge.retention { background: var(--warn-wash); color: var(--warn); }
     .media-placeholder { border-style: dashed; }
-    .media-placeholder img { width: 28px; height: 20px; border-radius: 4px; object-fit: cover; }
-    .source-link { color: var(--teal); text-decoration: none; }
+    .media-card { display: flex; flex: 0 1 240px; flex-direction: column; gap: 6px; min-width: 0; max-width: min(100%, 260px); margin: 0; padding: 7px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--paper); color: var(--ink-soft); }
+    .media-card-visual { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .media-card-image { width: 96px; height: 64px; flex: 0 0 auto; border-radius: 6px; background: var(--panel-deep); object-fit: cover; }
+    .media-card.is-sticker .media-card-image { width: 64px; height: 64px; object-fit: contain; }
+    .media-icon { display: grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: var(--panel-deep); color: var(--teal); font-size: 18px; }
+    .media-caption { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; font-family: var(--mono); font-size: 10px; line-height: 1.4; }
+    .media-caption strong { color: var(--ink); font-weight: 800; overflow-wrap: anywhere; }
+    .media-note { color: var(--muted); overflow-wrap: anywhere; }
+    .media-summary { display: grid; gap: 5px; margin-top: 10px; }
+    .media-summary-item { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); font-family: var(--mono); font-size: 10px; line-height: 1.4; }
+    .media-summary-item strong { color: var(--ink); font-weight: 800; overflow-wrap: anywhere; }
+    .media-summary-item span { color: var(--muted); overflow-wrap: anywhere; }
+    .participant-profile { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0 12px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+    .profile-avatar { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; background: var(--panel-deep); }
+    .profile-body { min-width: 0; }
+    .profile-name { color: var(--ink); font-size: 15px; font-weight: 820; line-height: 1.25; overflow-wrap: anywhere; }
+    .profile-handle { margin-top: 2px; color: var(--muted); font-family: var(--mono); font-size: 10px; overflow-wrap: anywhere; }
+    .profile-meta { display: grid; gap: 3px; margin: 8px 0 0; }
+    .profile-meta-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; font-family: var(--mono); font-size: 10px; }
+    .profile-meta-row dt { color: var(--muted); }
+    .profile-meta-row dd { min-width: 0; margin: 0; color: var(--ink-soft); overflow-wrap: anywhere; }
+    .message-username { color: var(--muted); font-family: var(--mono); font-size: 9px; overflow-wrap: anywhere; }
+    .source-link { min-height: 44px; color: var(--teal); text-decoration: none; }
     .source-link:hover { text-decoration: underline; }
     .window-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; background: #fbfcfc; }
     .window-status { color: var(--muted); font-family: var(--mono); font-size: 10px; }
-    .window-actions { display: flex; gap: 7px; }
+    .window-actions { display: flex; min-width: 0; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
     .window-button { font-size: 11px; }
+    .window-edge-button { border-color: var(--yellow); color: var(--ink); }
     .window-button:disabled { cursor: not-allowed; opacity: .45; }
     .empty-state { padding: 44px 24px; color: var(--muted); text-align: center; }
     .empty-state strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 15px; }
@@ -264,14 +230,10 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
 
     @media (max-width: 1180px) {
       .app-layout { grid-template-columns: 224px minmax(0, 1fr); }
-      .provenance-panel { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 22px; border-top: 1px solid var(--line-strong); border-left: 0; }
+      .app-layout > .provenance-panel { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 22px; border-top: 1px solid var(--line-strong); border-left: 0; }
       .provenance-panel > .detail-section:first-of-type { border-top: 0; }
     }
     @media (max-width: 760px) {
-      .topbar { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
-      .brand { min-width: 0; }
-      .topbar-title { order: 3; flex: 0 0 100%; }
-      .top-action { display: inline-flex; min-height: 44px; padding: 9px 12px; }
       .app-layout { display: block; min-height: 0; }
       .left-rail, .provenance-panel { display: none; border: 0; }
       body.show-filters .left-rail, body.show-provenance .provenance-panel { display: block; }
@@ -286,14 +248,16 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       .message-row { grid-template-columns: 34px minmax(0, 1fr); gap: 9px; padding: 13px 12px; }
       .message-avatar { width: 34px; height: 34px; border-radius: 10px; }
       .message-time { grid-column: 2; justify-self: start; margin-top: 2px; }
-      .window-button { min-height: 44px; }
+      .window-controls { align-items: flex-start; flex-direction: column; }
+      .window-actions { width: 100%; justify-content: flex-start; }
+      .window-button { min-width: max-content; min-height: 44px; }
       .transcript-heading, .window-controls { padding-left: 13px; padding-right: 13px; }
       .coverage-banner { border-radius: 9px; }
     }
     @media print {
       :root { color-scheme: light; }
       body { background: #fff; font-size: 12px; }
-      .topbar, .left-rail, .provenance-panel, .reader-tools, .search-row, .window-controls { display: none !important; }
+      .left-rail, .provenance-panel, .reader-tools, .search-row, .window-controls { display: none !important; }
       .app-layout { display: block; min-height: 0; }
       .reader { padding: 0; }
       .reader-header { display: block; max-width: none; margin-bottom: 18px; }
@@ -334,46 +298,29 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     html, body { background: var(--paper); color: var(--ink); }
     body { color-scheme: dark; }
     button, a, select, input { touch-action: manipulation; }
-    .topbar { min-height: 64px; padding: 10px clamp(16px, 2.5vw, 34px); border-bottom-color: var(--line); background: var(--chrome, #151617); }
-    .brand { min-width: 216px; }
-    .brand-mark { width: 38px; height: 38px; border-color: var(--yellow); border-radius: 50%; background: var(--yellow); box-shadow: none; }
-    .brand-name { color: var(--ink); }
-    .brand-subtitle, .topbar-title .kicker { color: var(--muted); }
-    .topbar-title strong { color: var(--ink); }
-    .read-only-badge, .top-action { border-color: var(--line-strong); background: var(--surface); color: var(--ink-soft); }
-    .read-only-badge { font-weight: 700; }
     .local-dot { background: var(--teal); box-shadow: 0 0 0 3px rgba(123, 224, 211, .14); }
-    .app-layout { grid-template-columns: 304px minmax(0, 1fr) 310px; min-height: calc(100vh - 64px); }
+    .app-layout { grid-template-columns: var(--chat-list) minmax(0, 1fr); min-height: 100vh; }
     .left-rail, .provenance-panel { background: var(--panel); }
     .left-rail { padding: 20px 16px; border-right-color: var(--line); }
     .provenance-panel { padding: 21px 18px; border-left-color: var(--line); }
     .archive-summary { border-bottom-color: var(--line); }
-    .rail-profile { display: flex; align-items: center; gap: 10px; min-height: 48px; margin-bottom: 18px; padding-bottom: 15px; border-bottom: 1px solid var(--line); }
-    .rail-avatar { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--yellow); color: #111; font-size: 11px; font-weight: 850; }
-    .rail-profile strong, .rail-profile span { display: block; }
-    .rail-profile strong { color: var(--ink); font-size: 13px; }
-    .rail-profile span { color: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
-    .rail-profile .rail-menu { margin-left: auto; color: var(--muted); font-size: 12px; letter-spacing: 2px; }
     .archive-kind { color: var(--yellow); }
     .archive-title, .archive-stat strong, .panel-heading, .selected-message h3, .detail-section h3, .empty-state strong { color: var(--ink); }
     .archive-stat, .detail-row, .filter-section h2, .kicker, .provenance-intro, .panel-note { color: var(--muted); }
     .archive-stat strong, .detail-row dd { color: var(--ink-soft); }
     .filter-section { padding-top: 18px; }
-    .filter-button { color: var(--ink-soft); }
-    .filter-button:hover { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
-    .filter-button[aria-pressed="true"] { border-color: var(--yellow); background: var(--yellow); color: #111; }
     .filter-count { color: var(--muted); }
     .filter-avatar { background: var(--panel-deep); }
     .filter-initials, .archive-kind { color: var(--yellow); }
-    .filter-button[aria-pressed="true"] .filter-initials, .filter-button[aria-pressed="true"] .filter-count { color: #111; }
     .rail-footer { border-top-color: var(--line); color: var(--muted); }
     .rail-footer strong { color: var(--ink); }
     .manifest-note { border-color: var(--line); background: var(--surface); }
-    .reader { background: var(--paper); padding-top: 24px; }
+    .reader { background: var(--paper); }
     .reader-heading h1 { color: var(--ink); text-wrap: balance; }
     .reader-subtitle { color: var(--muted); }
     .select-control, .print-button, .window-button { border-color: var(--line-strong); background: var(--surface); color: var(--ink-soft); }
-    .select-control:focus, .search-input:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 252, 0, .16); }
+    .window-edge-button { border-color: var(--yellow); color: var(--ink); }
+    .select-control:focus-visible, .search-input:focus-visible { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 252, 0, .16); }
     .print-button { border-color: var(--yellow); background: var(--yellow); color: #111; }
     .print-button:hover { background: #fff83a; }
     .search-input { border-color: var(--line-strong); background: var(--surface); color: var(--ink); }
@@ -391,7 +338,7 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     .is-verified .coverage-next { color: var(--teal); }
     .transcript-frame { border-color: var(--line); background: var(--surface); box-shadow: var(--shadow); }
     .transcript-heading, .window-controls { border-color: var(--line); background: var(--panel); }
-    .transcript-heading strong { color: var(--ink); }
+    .transcript-heading h2 { color: var(--ink); }
     .transcript-heading span, .window-status { color: var(--muted); }
     .date-divider { color: var(--muted); }
     .date-divider::after { background: var(--line); }
@@ -412,7 +359,14 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     .evidence-badge.saved { background: var(--teal-wash); color: var(--teal); }
     .evidence-badge.retention { background: var(--warn-wash); color: var(--warn); }
     .source-link { color: var(--cyan, #35c7ff); }
+    .media-card { border-color: var(--line-strong); background: var(--panel); color: var(--ink-soft); }
+    .media-card-image, .media-icon { background: var(--panel-deep); }
+    .media-caption strong, .profile-name { color: var(--ink); }
+    .profile-handle, .media-note { color: var(--muted); }
+    .participant-profile { border-color: var(--line); background: var(--surface); }
+    .profile-meta-row dd { color: var(--ink-soft); }
     .window-button:hover:not(:disabled) { border-color: var(--yellow); color: var(--ink); }
+    .window-edge-button:hover:not(:disabled) { background: var(--yellow); color: #111; }
     .empty-state { color: var(--muted); }
     .selected-message, .detail-section { border-color: var(--line); }
     .detail-section h3 { color: var(--muted); }
@@ -426,12 +380,13 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     :focus-visible { outline-color: var(--yellow); }
     .skip-link { background: var(--yellow); color: #111; }
     .skip-link { position: fixed; top: 8px; left: 8px; z-index: 10; padding: 8px 11px; border-radius: 6px; transform: translateY(-150%); transition: transform 120ms ease; }
-    .skip-link:focus { transform: translateY(0); }
+    .skip-link:focus-visible { transform: translateY(0); }
 
     @media print {
       :root { color-scheme: light; --paper: #fff; --surface: #fff; --panel: #fff; --ink: #111; --ink-soft: #222; --muted: #555; --line: #c7c7c7; --line-strong: #999; --yellow-wash: #fffbd0; --teal-wash: #e2f2f0; --warn-wash: #fff8d9; }
       body { background: #fff; color: #111; }
       .message-row, .transcript-heading, .window-controls { background: #fff; box-shadow: none; }
+      .message-row { content-visibility: visible; contain-intrinsic-size: auto; }
       .message-row { box-shadow: inset 3px 0 #777; }
       .message-row.is-selected { box-shadow: inset 3px 0 #111; }
     }
@@ -454,108 +409,517 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       .search-row { display: block; }
       .result-count { display: block; margin-top: 7px; }
     }
+
+    /* Snapchat Web fidelity pass: keep the familiar shell, remove the live-client fiction. */
+    :root {
+      --chat-list: 304px;
+      --snap-bg: #0f1011;
+      --snap-chrome: #151617;
+      --snap-surface: #242628;
+      --snap-bubble: #303133;
+      --snap-muted: #7c7f86;
+      --snap-line: #2c2e31;
+    }
+
+    html, body { min-height: 100%; background: var(--snap-bg); color: var(--ink); }
+    html { color-scheme: dark; }
+    body { min-width: 300px; height: 100vh; overflow: hidden; background: var(--snap-bg); }
+    button, a, select, input { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    select { background-color: var(--snap-surface); color: var(--ink-soft); }
+
+    .app-shell { height: 100vh; min-height: 0; overflow: hidden; }
+    .app-layout {
+      display: grid;
+      grid-template-columns: var(--chat-list) minmax(0, 1fr);
+      width: 100%;
+      height: 100vh;
+      min-height: 0;
+      margin-left: 0;
+    }
+    .app-layout > .left-rail { grid-column: 1; grid-row: 1; }
+    .app-layout > .reader { grid-column: 2; grid-row: 1; }
+    .left-rail {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 0;
+      overflow: hidden;
+      border: 0;
+      border-right: 1px solid var(--snap-line);
+      background: var(--snap-chrome);
+    }
+    .rail-heading-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 52px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--snap-line);
+    }
+    .rail-heading-row strong { font-size: 17px; letter-spacing: -.02em; }
+    .rail-heading-row span { color: var(--snap-muted); font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+    .left-rail .search-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: none;
+      margin: 0;
+      padding: 12px 12px 8px;
+    }
+    .left-rail .search-wrap { min-width: 0; }
+    .left-rail .search-input {
+      min-height: 36px;
+      padding: 7px 12px 7px 34px;
+      border-color: transparent;
+      border-radius: 20px;
+      background: #282a2c;
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .left-rail .search-input:hover { border-color: var(--snap-line); }
+    .left-rail .search-input:focus-visible { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 252, 0, .14); }
+    .left-rail .search-icon { top: 7px; left: 12px; color: #c2c4c8; font-family: var(--sans); font-size: 18px; line-height: 1; }
+    .left-rail .search-hint { display: none; }
+    .left-rail .result-count { display: none; }
+    .archive-summary { padding: 10px 14px 13px; border-bottom-color: var(--snap-line); }
+    .archive-kind { color: var(--yellow); font-size: 9px; letter-spacing: .08em; }
+    .archive-title { margin: 4px 0 6px; font-size: 15px; }
+    .archive-stat-list { display: flex; gap: 10px; }
+    .archive-stat { display: flex; align-items: baseline; gap: 4px; font-size: 9px; }
+    .archive-stat dd { margin: 0; }
+    .archive-stat strong { color: var(--ink-soft); font-weight: 650; }
+    .filter-section { min-height: 0; padding: 12px 8px 0; overflow: auto; }
+    .filter-section h2 { margin: 0 6px 6px; color: var(--snap-muted); font-size: 9px; letter-spacing: .1em; }
+    .filter-list { gap: 2px; }
+    .filter-avatar { width: 38px; height: 38px; border-radius: 50%; background: #34363a; }
+    .filter-initials { color: var(--yellow); font-size: 10px; }
+    .filter-count { color: var(--snap-muted); font-size: 9px; }
+    .rail-footer { margin-top: auto; padding: 12px 14px max(14px, env(safe-area-inset-bottom)); border-top-color: var(--snap-line); color: var(--snap-muted); font-size: 10px; }
+    .rail-footer strong { color: var(--ink-soft); }
+    .manifest-note { margin-top: 8px; padding: 8px; border-color: var(--snap-line); border-radius: 7px; background: #1b1c1e; font-size: 9px; }
+
+    .reader {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      height: 100vh;
+      min-height: 0;
+      padding: 0 16px 16px;
+      overflow: hidden;
+      background: var(--snap-bg);
+    }
+    .reader-header {
+      display: flex;
+      flex: 0 0 64px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      max-width: none;
+      margin: 0;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--snap-line);
+      background: var(--snap-chrome);
+    }
+    .chat-header-leading { display: flex; align-items: center; min-width: 0; gap: 10px; }
+    .chat-back { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: #2b2d30; color: var(--ink); font-size: 29px; line-height: 1; }
+    .chat-header-avatar { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #45474b; color: var(--yellow); font-family: var(--mono); font-size: 10px; font-weight: 800; object-fit: cover; }
+    .reader-heading { min-width: 0; }
+    .reader-heading .kicker { display: none; }
+    .reader-heading h1 { margin: 0; overflow: hidden; color: var(--ink); font-size: 16px; font-weight: 750; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+    .reader-subtitle { max-width: 52ch; overflow: hidden; color: var(--snap-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .reader-tools { flex: 0 0 auto; gap: 6px; }
+    .reader-tools .kicker { display: none; }
+    .select-control, .print-button { min-height: 36px; padding: 7px 10px; border-color: var(--snap-line); border-radius: 18px; background: #2a2c2f; color: var(--ink-soft); font-size: 11px; }
+    .select-control:hover, .print-button:hover { border-color: var(--yellow); }
+    .print-button { border-color: var(--yellow); background: var(--yellow); color: #111; font-weight: 800; }
+    .print-button:hover { background: #fff83a; color: #111; }
+
+    .reader > .coverage-banner {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 2px 10px;
+      max-width: none;
+      min-height: 42px;
+      margin: 10px 0 0;
+      padding: 8px 12px 8px 15px;
+      border: 1px solid var(--snap-line);
+      border-radius: 8px;
+      background: #242528;
+    }
+    .reader > .coverage-banner::before { top: 0; right: auto; bottom: 0; left: 0; width: 3px; height: auto; border-radius: 8px 0 0 8px; }
+    .coverage-banner-header { display: contents; }
+    .coverage-title { align-self: center; margin: 0; font-size: 11px; }
+    .coverage-chip { justify-self: end; min-height: 20px; padding: 3px 6px; font-size: 8px; }
+    .coverage-copy { grid-column: 1 / -1; max-width: none; margin: 0; color: var(--snap-muted); font-size: 10px; line-height: 1.35; }
+    .coverage-step, .coverage-next { grid-column: 1 / -1; margin: 0; color: var(--warn); font-size: 10px; line-height: 1.35; }
+
+    .transcript-frame {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      min-height: 0;
+      max-width: none;
+      margin: 10px 0 0;
+      border: 1px solid var(--snap-line);
+      border-radius: 14px;
+      background: var(--snap-chrome);
+      box-shadow: none;
+    }
+    .transcript-heading { flex: 0 0 34px; padding: 8px 13px; border-bottom-color: var(--snap-line); background: var(--snap-chrome); }
+    .transcript-heading h2 { color: var(--snap-muted); font-size: 9px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+    .transcript-heading span { color: var(--snap-muted); font-size: 9px; }
+    .message-list { flex: 1 1 auto; min-height: 0; padding: 0 12px 12px; overflow: auto; overscroll-behavior: contain; scrollbar-color: #4a4c50 transparent; scrollbar-width: thin; }
+    .date-divider { justify-content: center; padding: 13px 8px 9px; color: var(--snap-muted); font-size: 9px; letter-spacing: .11em; }
+    .date-divider::after { display: none; }
+    .message-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      width: min(100%, 680px);
+      margin: 0 auto 3px 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      scroll-margin: 18px;
+    }
+    .message-row:hover { background: transparent; }
+    .message-row .message-avatar { display: none; }
+    .message-main { min-width: 0; padding: 7px 10px 8px; border-radius: 2px; background: var(--snap-bubble); }
+    .message-row.speaker-cyan .message-main { box-shadow: inset 3px 0 #1da1ff; }
+    .message-row.speaker-coral .message-main { box-shadow: inset 3px 0 var(--coral); }
+    .message-byline { gap: 8px; margin-bottom: 1px; }
+    .message-author { color: #1da1ff; font-size: 11px; font-weight: 800; letter-spacing: .01em; text-transform: uppercase; }
+    .speaker-coral .message-author { color: #ff477e; }
+    .message-id, .message-username { display: none; }
+    .message-content { max-width: none; margin: 0; color: #f2f2f3; font-size: 15px; line-height: 1.35; }
+    .message-content.is-empty { color: var(--snap-muted); font-size: 13px; }
+    .message-time { align-self: start; min-height: 0; padding: 5px 1px 0; color: var(--snap-muted); font-size: 10px; }
+    .message-time:hover { color: var(--yellow); }
+    .message-row.is-continuation { margin-top: -2px; }
+    .message-row.is-continuation .message-main { padding-top: 5px; border-top-left-radius: 0; border-bottom-left-radius: 2px; }
+    .message-row.is-continuation .message-author { display: none; }
+    .message-row.is-continuation .message-byline { min-height: 0; margin: 0; }
+    .message-row.is-continuation .message-byline::before { content: ""; display: block; height: 1px; }
+    .message-row.is-selected .message-main { background: #403d00; box-shadow: inset 3px 0 var(--yellow), inset 0 0 0 1px rgba(255, 252, 0, .28); }
+    .message-row.is-selected .message-time { color: var(--yellow); }
+    .evidence-line { gap: 4px; margin-top: 7px; }
+    .evidence-badge, .media-placeholder, .source-link { min-height: 20px; padding: 3px 6px; border-color: #4a4c50; border-radius: 4px; background: #252629; font-size: 9px; }
+    .media-card { flex-basis: 300px; max-width: min(100%, 360px); margin: 0; padding: 5px; border-color: #4a4c50; border-radius: 6px; background: #252629; }
+    .media-card-image { width: 96px; height: 58px; border-radius: 4px; }
+    .media-card.is-sticker .media-card-image { width: 58px; height: 58px; }
+    .media-icon { width: 38px; height: 38px; border-radius: 5px; background: #35373a; color: var(--yellow); }
+    .media-caption { font-size: 9px; }
+
+    .archive-composer { display: flex; flex: 0 0 58px; align-items: center; gap: 9px; padding: 9px 11px; border-top: 1px solid var(--snap-line); background: var(--snap-chrome); }
+    .composer-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #2c2e31; color: var(--ink-soft); font-size: 22px; line-height: 1; }
+    .composer-icon-secondary { font-size: 18px; }
+    .composer-field { display: flex; flex: 1; align-items: center; min-width: 0; min-height: 38px; padding: 0 14px; border: 1px solid #484a4e; border-radius: 20px; background: #2c2e31; color: var(--snap-muted); font-size: 12px; }
+    .window-controls { flex: 0 0 auto; padding: 8px 11px; border-top: 1px solid var(--snap-line); background: #111213; }
+    .window-status { color: var(--snap-muted); font-size: 9px; }
+    .window-actions { gap: 5px; }
+    .window-button { min-height: 28px; padding: 5px 8px; border-color: var(--snap-line); border-radius: 14px; background: #242628; color: var(--snap-muted); font-size: 9px; }
+    .window-edge-button { border-color: var(--yellow); color: var(--ink-soft); }
+    .window-button:hover:not(:disabled) { border-color: var(--yellow); color: var(--ink); }
+    .window-button:disabled { opacity: .38; }
+
+    .provenance-panel {
+      position: fixed;
+      z-index: 40;
+      inset: 0 0 0 auto;
+      display: block;
+      width: min(370px, 100vw);
+      max-width: 100%;
+      padding: 22px 20px;
+      overflow: auto;
+      border: 0;
+      border-left: 1px solid var(--snap-line);
+      background: var(--snap-chrome);
+      box-shadow: -18px 0 42px rgba(0, 0, 0, .28);
+      transform: translateX(100%);
+      visibility: hidden;
+      pointer-events: none;
+      transition: transform 180ms ease, visibility 180ms ease;
+      overscroll-behavior: contain;
+    }
+    body.show-provenance .provenance-panel { transform: translateX(0); visibility: visible; pointer-events: auto; }
+    .provenance-panel .panel-heading { font-size: 16px; }
+    .provenance-panel .selected-message { border-top-color: var(--snap-line); border-bottom-color: var(--snap-line); }
+    .provenance-panel .detail-section { border-bottom-color: var(--snap-line); }
+    .provenance-panel .participant-profile, .provenance-panel .detail-copy, .provenance-panel .media-summary-item { border-color: var(--snap-line); background: var(--snap-surface); }
+
+    @media (max-width: 900px) {
+      :root { --chat-list: 250px; }
+      .app-layout { grid-template-columns: var(--chat-list) minmax(0, 1fr); }
+      .reader { padding: 0 8px 8px; }
+      .reader-header { padding: 0 8px; }
+      .chat-back { width: 30px; height: 30px; }
+      .chat-header-avatar { width: 32px; height: 32px; }
+      .reader-tools .select-control { max-width: 105px; }
+      .provenance-panel { width: min(360px, 100vw); }
+    }
+    @media (max-width: 720px) {
+      .app-layout { display: block; width: 100%; }
+      .left-rail { display: none; position: fixed; z-index: 35; inset: 0 auto 0 0; width: min(300px, 100vw); box-shadow: 18px 0 40px rgba(0, 0, 0, .3); }
+      body.show-filters .left-rail { display: flex; }
+      .reader-tools .filter-button { display: grid; }
+      .reader { width: 100%; }
+      .reader-header { flex-basis: 58px; }
+      .reader-tools .select-control { display: none; }
+      .print-button { min-height: 32px; padding: 6px 9px; font-size: 10px; }
+      .reader > .coverage-banner { margin-top: 8px; }
+      .transcript-frame { margin-top: 8px; }
+      .message-list { padding-right: 8px; padding-left: 8px; }
+      .message-row { width: 100%; }
+      .window-controls { align-items: center; }
+      .window-actions { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+      .window-button { white-space: nowrap; }
+    }
+    @media print {
+      body { height: auto; overflow: visible; }
+      .app-shell, .app-layout, .reader, .transcript-frame { height: auto; min-height: 0; overflow: visible; }
+      .reader { padding: 0; }
+      .chat-header-leading { display: block; }
+      .chat-back, .chat-header-avatar { display: none; }
+      .archive-composer { display: none; }
+      .message-list { overflow: visible; }
+    }
+
+    /* Icon and visibility controls: one local SVG family, labels kept for assistive tech. */
+    .ui-icon { display: block; width: 18px; height: 18px; flex: 0 0 auto; }
+
+    .rail-product {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 9px;
+      min-height: 76px;
+      padding: 11px 13px;
+      border-bottom: 1px solid var(--snap-line);
+      background: #111213;
+    }
+    .rail-product-brand { display: flex; align-items: center; min-width: 0; gap: 9px; }
+    .rail-product-mark { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 12px; background: var(--yellow); }
+    .rail-product-mark svg { width: 27px; height: 27px; }
+    .rail-product-copy { display: grid; min-width: 0; gap: 1px; }
+    .rail-product-copy strong { overflow: hidden; color: var(--ink); font-size: 15px; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+    .rail-product-copy span { overflow: hidden; color: var(--snap-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .rail-product-status { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; color: var(--snap-muted); font-family: var(--mono); font-size: 8px; letter-spacing: .07em; text-transform: uppercase; }
+    .rail-product-status .local-dot { width: 6px; height: 6px; background: var(--teal); box-shadow: none; }
+
+    .coverage-bell, .time-control, .filter-button, .evidence-button, .print-button {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      min-height: 36px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid var(--snap-line);
+      border-radius: 50%;
+      background: #2a2c2f;
+      color: var(--ink-soft);
+    }
+    .coverage-bell, .filter-button, .evidence-button, .print-button { position: relative; padding: 0; }
+    .filter-button { display: none; }
+    .coverage-bell:hover, .time-control:hover, .filter-button:hover, .evidence-button:hover { border-color: var(--yellow); color: var(--yellow); }
+    .coverage-bell:focus-visible, .filter-button:focus-visible, .evidence-button:focus-visible, .time-control:focus-within { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 252, 0, .14); }
+    .evidence-button[aria-expanded="true"] { border-color: var(--yellow); background: #3a3800; color: var(--yellow); }
+    .coverage-bell-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border: 2px solid #2a2c2f; border-radius: 50%; background: var(--yellow); }
+    .coverage-bell[data-status="verified"] .coverage-bell-dot { background: var(--teal); }
+    .coverage-bell[data-status="unverified"] .coverage-bell-dot { background: var(--warn); }
+    .time-control { position: relative; cursor: pointer; }
+    .time-control .select-control { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; appearance: none; }
+    .time-control .select-control:focus-visible { box-shadow: none; }
+    .print-button { border-color: var(--yellow); background: var(--yellow); color: #111; }
+    .print-button:hover { border-color: var(--yellow); background: #fff83a; color: #111; }
+    .print-button .ui-icon { width: 19px; height: 19px; }
+    .reader-tools { gap: 8px; }
+    .reader-tools .select-control { border-radius: 0; background: transparent; }
+    .reader > .coverage-banner { display: none; }
+    body.show-coverage .reader > .coverage-banner { display: grid; }
+
+    .author-filter-menu { position: relative; margin: 0 6px; }
+    .author-filter-trigger {
+      display: grid;
+      grid-template-columns: 32px minmax(0, 1fr) auto 16px;
+      align-items: center;
+      width: 100%;
+      gap: 9px;
+      min-height: 54px;
+      padding: 8px 10px;
+      border: 1px solid var(--snap-line);
+      border-radius: 10px;
+      background: #1b1c1e;
+      color: var(--ink-soft);
+      cursor: pointer;
+      list-style: none;
+      text-align: left;
+      touch-action: manipulation;
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+    .author-filter-trigger::-webkit-details-marker { display: none; }
+    .author-filter-trigger::marker { content: ""; }
+    .author-filter-trigger:hover { border-color: var(--line-strong); background: #242628; color: var(--ink); }
+    .author-filter-trigger:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+    .author-filter-menu[open] .author-filter-trigger { border-color: var(--yellow); border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; background: #242628; color: var(--ink); }
+    .author-filter-trigger-avatar { width: 32px; height: 32px; border-radius: 50%; font-size: 9px; }
+    .author-filter-trigger-copy { display: grid; min-width: 0; gap: 1px; }
+    .author-filter-trigger-label { overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 780; text-overflow: ellipsis; white-space: nowrap; }
+    .author-filter-trigger-status { overflow: hidden; color: var(--snap-muted); font-family: var(--mono); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .author-filter-trigger .filter-count { margin-left: 0; color: var(--snap-muted); font-size: 9px; }
+    .author-filter-chevron { width: 16px; height: 16px; color: var(--snap-muted); transition: transform 150ms ease, color 150ms ease; }
+    .author-filter-menu[open] .author-filter-chevron { color: var(--yellow); transform: rotate(180deg); }
+    .author-filter-panel { margin-top: 4px; padding: 7px; border: 1px solid var(--snap-line); border-radius: 10px; background: #1b1c1e; box-shadow: 0 10px 24px rgba(0, 0, 0, .22); }
+    .author-filter-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 6px 6px; color: var(--snap-muted); font-family: var(--mono); font-size: 9px; letter-spacing: .02em; }
+    .author-filter-panel-head span:last-child { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+    .author-filter-panel .filter-list { display: grid; gap: 2px; }
+    .author-filter-option { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto 32px; align-items: center; width: 100%; gap: 8px; min-height: 42px; padding: 6px 7px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--ink-soft); text-align: left; transition: background 150ms ease, border-color 150ms ease, color 150ms ease; }
+    .author-filter-option:hover { border-color: var(--line-strong); background: #242628; color: var(--ink); }
+    .author-filter-option[aria-pressed="true"] { background: #2b2d2f; color: var(--ink); }
+    .author-filter-option .filter-avatar { width: 30px; height: 30px; border-radius: 50%; }
+    .author-filter-option .filter-label { min-width: 0; overflow: hidden; font-size: 11px; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
+    .author-filter-option .filter-count { margin-left: 0; color: var(--snap-muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+    .author-filter-option .filter-toggle { position: relative; display: block; width: 30px; height: 18px; border-radius: 999px; background: #424449; box-shadow: inset 0 0 0 1px #585b61; }
+    .author-filter-option .filter-toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: #c9cbd0; transition: transform 150ms ease, background 150ms ease; }
+    .author-filter-option[aria-pressed="true"] .filter-toggle { background: var(--yellow); box-shadow: none; }
+    .author-filter-option[aria-pressed="true"] .filter-toggle::after { transform: translateX(12px); background: #111; }
+    .author-filter-option[aria-pressed="true"] .filter-count { color: var(--snap-muted); }
+
+    @media print {
+      .reader > .coverage-banner { display: grid !important; }
+    }
   </style>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to transcript</a>
   <div class="app-shell">
-    <header class="topbar">
-      <div class="brand" aria-label="CatchThat offline archive">
-        <div class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M10 20.5C10 13.596 15.596 8 22.5 8h3C32.404 8 38 13.596 38 20.5v9c0 5.799-4.701 10.5-10.5 10.5h-7C14.701 40 10 35.299 10 29.5v-9Z" fill="#fffc00" stroke="#183248" stroke-width="2.5"/>
-            <path d="m15 37 3.3 6.2 6.2-3.2" fill="#fffc00" stroke="#183248" stroke-width="2.5" stroke-linejoin="round"/>
-            <circle cx="20" cy="23" r="2" fill="#183248"/><circle cx="28" cy="23" r="2" fill="#183248"/>
-          </svg>
-        </div>
-        <div><div class="brand-name">CatchThat</div><div class="brand-subtitle">offline archive reader</div></div>
-      </div>
-      <div class="topbar-title"><span class="kicker">Local record</span><strong id="topbar-thread">Conversation</strong></div>
-      <div class="topbar-actions">
-        <span class="read-only-badge"><span class="local-dot" aria-hidden="true"></span>Read-only · offline</span>
-        <button class="top-action" type="button" data-action="toggle-filters" aria-expanded="false" aria-controls="left-rail">Filters</button>
-        <button class="top-action" type="button" data-action="toggle-provenance" aria-expanded="false" aria-controls="provenance-panel">Evidence</button>
-      </div>
-    </header>
-
     <div class="app-layout">
-      <aside class="left-rail" id="left-rail" aria-label="Archive filters">
-        <section class="archive-summary">
-          <div class="rail-profile" aria-label="CatchThat local archive">
-            <div class="rail-avatar" aria-hidden="true">CT</div>
-            <div><strong>CatchThat</strong><span>Local archive</span></div>
-            <span class="rail-menu" aria-hidden="true">•••</span>
-          </div>
-          <div class="archive-kind" id="archive-kind">Snapchat chat</div>
-          <h2 class="archive-title" id="archive-title">Conversation</h2>
-          <dl class="archive-stat-list">
-            <div class="archive-stat"><dt>Messages</dt><dd><strong id="archive-message-count">0</strong></dd></div>
-            <div class="archive-stat"><dt>Captured</dt><dd><strong id="archive-captured-at">—</strong></dd></div>
-            <div class="archive-stat"><dt>Integrity</dt><dd><strong>manifest.json</strong></dd></div>
-          </dl>
-        </section>
-        <section class="filter-section" aria-labelledby="filter-heading">
-          <h2 id="filter-heading">Author filter</h2>
-          <ul class="filter-list" id="author-filters"></ul>
-        </section>
-        <div class="rail-footer">
-          <strong>Nothing leaves this folder.</strong>
-          <p>CatchThat shows the captured record. It cannot send, edit, or sync messages.</p>
-          <div class="manifest-note"><strong>Integrity manifest</strong><br>SHA-256 hashes are emitted beside this viewer for offline verification.</div>
-        </div>
-      </aside>
-
       <main class="reader" id="main-content">
         <header class="reader-header">
-          <div class="reader-heading">
-            <div class="kicker">Captured conversation</div>
-            <h1 id="reader-title">Conversation</h1>
-            <div class="reader-subtitle" id="reader-subtitle">A local, read-only record of the currently captured chat.</div>
+          <div class="chat-header-leading">
+            <span class="chat-back" aria-hidden="true">‹</span>
+            <span class="chat-header-avatar" id="chat-header-avatar" aria-hidden="true">CT</span>
+            <div class="reader-heading">
+              <div class="kicker">Captured conversation</div>
+              <h1 id="reader-title">Conversation</h1>
+              <div class="reader-subtitle" id="reader-subtitle">Browse the captured range, then inspect the selected row’s evidence.</div>
+            </div>
           </div>
           <div class="reader-tools">
-            <label class="kicker" for="timestamp-mode">Time</label>
-            <select class="select-control" id="timestamp-mode" aria-label="Timestamp display mode">
-              <option value="local">Local time</option>
-              <option value="utc">UTC</option>
-            </select>
-            <button class="print-button" type="button" data-action="print">Print / PDF</button>
+            <button class="filter-button" type="button" data-action="toggle-filters" aria-expanded="false" aria-controls="left-rail" aria-label="Show message visibility controls" title="Show message visibility controls">
+              <svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <span class="sr-only">Filters</span>
+            </button>
+            <button class="coverage-bell" type="button" data-action="toggle-coverage" aria-expanded="false" aria-controls="coverage-banner" aria-label="Show archive coverage status" title="Archive coverage status">
+              <svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="coverage-bell-dot" aria-hidden="true"></span>
+            </button>
+            <button class="evidence-button" type="button" data-action="toggle-provenance" aria-expanded="false" aria-controls="provenance-panel" aria-label="Show evidence drawer" title="Show evidence drawer">
+              <svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+              <span class="sr-only">Evidence</span>
+            </button>
+            <label class="time-control" title="Timestamp display mode">
+              <svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v5l3.25 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="sr-only">Timestamp display mode</span>
+              <select class="select-control" id="timestamp-mode" aria-label="Timestamp display mode">
+                <option value="local">Local time</option>
+                <option value="utc">UTC</option>
+              </select>
+            </label>
+            <button class="print-button" type="button" data-action="print" aria-label="Print or save archive as PDF" title="Print or save archive as PDF">
+              <svg class="ui-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 14h10v6H7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M17 12h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+              <span class="sr-only">Print / PDF</span>
+            </button>
           </div>
         </header>
-
-        <div class="search-row">
-          <div class="search-wrap">
-            <label class="sr-only" for="search-input">Search this archive</label>
-            <span class="search-icon" aria-hidden="true">⌕</span>
-            <input class="search-input" id="search-input" name="q" type="search" placeholder="Search visible text, authors, or evidence" autocomplete="off">
-            <span class="search-hint" aria-hidden="true">/</span>
-          </div>
-          <div class="result-count" id="result-count" role="status" aria-live="polite">0 messages</div>
-        </div>
 
         <section class="coverage-banner" id="coverage-banner" aria-live="polite"></section>
 
         <section class="transcript-frame" aria-labelledby="transcript-heading">
           <div class="transcript-heading">
-            <strong id="transcript-heading">Readable transcript</strong>
+            <h2 id="transcript-heading">Chat history</h2>
             <span id="transcript-scope">Visible capture</span>
           </div>
-          <div class="message-list" id="message-list" role="list" aria-live="polite"></div>
+          <div class="message-list" id="message-list" role="list" aria-label="Captured messages"></div>
+          <div class="archive-composer" aria-label="Read-only capture status">
+            <span class="composer-icon" aria-hidden="true">＋</span>
+            <div class="composer-field" aria-disabled="true">Read-only capture · sending is disabled</div>
+            <span class="composer-icon composer-icon-secondary" aria-hidden="true">⌁</span>
+          </div>
           <div class="window-controls">
-            <div class="window-status" id="window-status">Showing 0</div>
+            <div class="window-status" id="window-status" role="status" aria-live="polite">Showing 0</div>
             <div class="window-actions">
-              <button class="window-button" type="button" data-action="older">Show older captured rows</button>
-              <button class="window-button" type="button" data-action="newer">Show newer captured rows</button>
+              <button class="window-button window-edge-button" type="button" data-action="edge" aria-label="Scroll to Oldest Captured Message">Scroll to Top</button>
+              <button class="window-button" type="button" data-action="older">Show Older Captured Rows</button>
+              <button class="window-button" type="button" data-action="newer">Show Newer Captured Rows</button>
             </div>
           </div>
         </section>
       </main>
 
+      <aside class="left-rail" id="left-rail" aria-label="Archive filters">
+        <div class="rail-product" aria-label="CatchThat private offline archive">
+          <div class="rail-product-brand">
+            <div class="rail-product-mark" aria-hidden="true">
+              <svg viewBox="0 0 64 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 12h19c5 0 9 4 9 9v7c0 5-4 9-9 9H11c-4 0-7-3-7-7V19c0-4 3-7 7-7Z" fill="#202124" stroke="#111" stroke-width="3"/><circle cx="22" cy="24" r="6" fill="#fffc00" stroke="#111" stroke-width="2.5"/><circle cx="22" cy="24" r="2" fill="#202124"/><path d="M39 18h12l9 6-9 6H39z" fill="#fffc00" stroke="#111" stroke-width="3" stroke-linejoin="round"/><path d="M17 37v7h10l4-7M48 18v-6h7v6" fill="none" stroke="#111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M46 24h7" stroke="#202124" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <div class="rail-product-copy"><strong translate="no">CatchThat</strong><span>Private chat archive</span></div>
+          </div>
+          <span class="rail-product-status"><span class="local-dot" aria-hidden="true"></span>Offline</span>
+        </div>
+        <div class="rail-heading-row">
+          <strong>Chats</strong>
+          <span>Local archive</span>
+        </div>
+        <div class="search-row">
+          <div class="search-wrap">
+            <label class="sr-only" for="search-input">Search this archive</label>
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input class="search-input" id="search-input" name="q" type="search" placeholder="Search" autocomplete="off">
+            <span class="search-hint" aria-hidden="true">/</span>
+          </div>
+          <div class="result-count" id="result-count" role="status" aria-live="polite">0 messages</div>
+        </div>
+        <section class="archive-summary">
+          <div class="archive-kind" id="archive-kind">Snapchat chat</div>
+          <h2 class="archive-title" id="archive-title">Conversation</h2>
+          <dl class="archive-stat-list">
+            <div class="archive-stat"><dt>Messages</dt><dd><strong id="archive-message-count">0</strong></dd></div>
+            <div class="archive-stat"><dt>Captured</dt><dd><strong id="archive-captured-at">—</strong></dd></div>
+          </dl>
+        </section>
+        <section class="filter-section" aria-labelledby="filter-heading">
+          <h2 id="filter-heading">Message visibility</h2>
+          <details class="author-filter-menu" id="author-filter-menu">
+            <summary class="author-filter-trigger" aria-controls="author-filters">
+              <span class="filter-avatar filter-initials author-filter-trigger-avatar" aria-hidden="true">ALL</span>
+              <span class="author-filter-trigger-copy">
+                <span class="author-filter-trigger-label" id="author-filter-trigger-label">All authors</span>
+                <span class="author-filter-trigger-status" id="author-filter-status" role="status" aria-live="polite">All people selected</span>
+              </span>
+              <span class="filter-count" id="author-filter-count">0</span>
+              <svg class="author-filter-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+            </summary>
+            <div class="author-filter-panel">
+              <div class="author-filter-panel-head"><span>Show messages from</span><span id="author-filter-panel-count">0 of 0 selected</span></div>
+              <ul class="filter-list" id="author-filters" aria-label="Author message filters"></ul>
+            </div>
+          </details>
+        </section>
+        <div class="rail-footer">
+          <strong>Nothing leaves this folder.</strong>
+          <p>Read-only: no sending, editing, or syncing.</p>
+          <div class="manifest-note"><strong>Integrity manifest</strong><br>SHA-256 hashes are emitted beside this viewer for offline verification.</div>
+        </div>
+      </aside>
+
       <aside class="provenance-panel" id="provenance-panel" aria-label="Message provenance">
         <section>
           <div class="kicker">Evidence rail</div>
           <h2 class="panel-heading">Source & provenance</h2>
-          <p class="provenance-intro">Select a row to inspect the exact captured record. This panel is evidence, not a live chat surface.</p>
-          <div class="selected-message" id="selected-message"></div>
+          <p class="provenance-intro">Select a row to inspect its source fields and visible evidence.</p>
+          <div class="selected-message" id="selected-message" aria-live="polite"></div>
           <div class="detail-section" id="record-details"></div>
           <div class="detail-section" id="visible-evidence"></div>
         </section>
@@ -586,9 +950,13 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       ranges_linked: false, ranges: [], notes: ["This capture has not been merged with an overlap-aware range chain."],
       next_action: "Capture overlapping ranges at the oldest and newest boundaries, then merge them."
     } : { status: "unverified", complete: false, range_count: 0, unique_message_count: messages.length, notes: ["No capture boundary metadata was supplied."], next_action: "Capture the open chat in overlapping ranges before treating it as complete." });
-    const searchTextById = new Map(messages.map((message) => [message.id, [message.content, message.author_id, ...(Array.isArray(message.media) ? message.media.flatMap((item) => [item.label, item.placeholder, item.kind]) : []), message.saved_state?.evidence, message.retention?.evidence].filter(Boolean).join(" ").toLocaleLowerCase()]));
+    const searchTextById = new Map(messages.map((message) => {
+      const participant = participants.get(message.author_id) || {};
+      const profile = participant.visible_profile || {};
+      return [message.id, [message.content, message.author_id, participant.display_name, participant.username, ...Object.values(profile), ...(Array.isArray(message.media) ? message.media.flatMap((item) => [item.label, item.placeholder, item.kind, item.subtype, item.alt]) : []), message.saved_state?.evidence, message.retention?.evidence].filter(Boolean).join(" ").toLocaleLowerCase()];
+    }));
     const windowSize = 240;
-    const state = { query: "", author: "*", timestampMode: "local", windowStart: 0, selected: null };
+    const state = { query: "", authorIds: new Set(participants.keys()), timestampMode: "local", windowStart: 0, selected: null, edgeTarget: "oldest" };
 
     const byId = (id) => document.getElementById(id);
     const clear = (node) => { while (node && node.firstChild) node.removeChild(node.firstChild); return node; };
@@ -597,7 +965,8 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     const clean = (value) => String(value ?? "").replace(/[ \t\f\v]+/g, " ").trim();
     const displayName = (id) => { const participant = participants.get(id); return participant?.display_name || participant?.username || id || "Unknown participant"; };
     const initials = (value) => clean(value).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "?";
-    const safePath = (value) => typeof value === "string" && value && !/^https?:\/\//i.test(value) ? value : null;
+    const safePath = (value) => typeof value === "string" && value && !/^(?:https?|data):\/\//i.test(value) ? value : null;
+    const safeHttp = (value) => typeof value === "string" && /^https?:\/\//i.test(value) ? value : null;
     const localZone = metadata.display_timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     const dateFormatter = (timeZone, options) => { try { return new Intl.DateTimeFormat(undefined, { timeZone, ...options }); } catch { return new Intl.DateTimeFormat(undefined, { timeZone: "UTC", ...options }); } };
     const timeLabel = (timestamp, mode) => {
@@ -636,12 +1005,29 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     };
     const renderAvatar = (participant, className) => {
       const path = safePath(participant?.avatar_path);
-      if (path) { const image = document.createElement("img"); image.className = className; image.width = className.includes("filter") ? 24 : 40; image.height = className.includes("filter") ? 24 : 40; image.src = path; image.alt = participant?.avatar_alt || `${displayName(participant?.id)} avatar`; image.loading = "lazy"; return image; }
-      return make("div", `${className} avatar-fallback`, initials(displayName(participant?.id)));
+      const size = className.includes("filter") ? 38 : className.includes("profile") ? 48 : 40;
+      if (path) { const image = document.createElement("img"); image.className = className; image.width = size; image.height = size; image.src = path; image.alt = participant?.avatar_alt || `${displayName(participant?.id)} avatar`; image.loading = "lazy"; return image; }
+      const fallback = make("div", `${className} avatar-fallback`, initials(displayName(participant?.id)));
+      if (participant?.avatar_ref) fallback.title = participant?.avatar_provenance?.note || "Remote avatar reference; image bytes were not captured.";
+      return fallback;
+    };
+    const authorIds = () => Array.from(participants.keys());
+    const allAuthorsSelected = () => { const ids = authorIds(); return ids.length === state.authorIds.size && ids.every((id) => state.authorIds.has(id)); };
+    const authorSelectionLabel = () => {
+      if (allAuthorsSelected()) return "All authors";
+      const selected = authorIds().filter((id) => state.authorIds.has(id)).map(displayName);
+      if (!selected.length) return "No authors";
+      return selected.length <= 2 ? selected.join(" + ") : `${selected.length} authors`;
+    };
+    const authorSelectionSummary = () => {
+      const ids = authorIds();
+      if (allAuthorsSelected()) return { label: "All authors", status: `All ${ids.length} ${ids.length === 1 ? "person" : "people"} selected` };
+      if (!state.authorIds.size) return { label: "No authors", status: "No people selected" };
+      return { label: "Selected authors", status: `${state.authorIds.size} of ${ids.length} people selected` };
     };
     const filteredMessages = () => {
       const query = state.query.toLocaleLowerCase().trim();
-      return messages.filter((message) => (state.author === "*" || message.author_id === state.author) && (!query || (searchTextById.get(message.id) || "").includes(query)));
+      return messages.filter((message) => state.authorIds.has(message.author_id) && (!query || (searchTextById.get(message.id) || "").includes(query)));
     };
     const indicatorBadge = (message, field, label) => {
       const indicator = message[field];
@@ -654,13 +1040,63 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       message.media.forEach((media) => {
         if (!media || typeof media !== "object") return;
         const path = safePath(media.path);
-        const badge = make("span", "media-placeholder");
-        if (path && media.kind === "image") { const image = document.createElement("img"); image.width = 28; image.height = 20; image.src = path; image.alt = media.alt || media.label || "Captured image"; badge.appendChild(image); }
-        const icon = make("span", "", media.kind === "image" ? "" : media.kind === "video" ? "▣" : media.kind === "audio" ? "◖" : "◌");
-        if (icon.textContent) badge.appendChild(icon);
-        badge.appendChild(document.createTextNode(`${media.label || media.kind || "Media"}${media.placeholder ? ` · ${media.placeholder}` : path ? " · local asset" : ""}`));
-        container.appendChild(badge);
+        const kind = media.kind || "unknown";
+        const isSticker = kind === "sticker" || media.subtype === "bitmoji";
+        const card = make("figure", `media-card${isSticker ? " is-sticker" : ""}`);
+        const visual = make("div", "media-card-visual");
+        const canPreview = Boolean(path && ["image", "sticker", "snap"].includes(kind));
+        if (canPreview) {
+          const image = document.createElement("img");
+          image.className = "media-card-image";
+          image.width = Number(media.width) || (isSticker ? 64 : 96);
+          image.height = Number(media.height) || (isSticker ? 64 : 64);
+          image.src = path;
+          image.alt = media.alt || media.label || (isSticker ? "Captured Bitmoji or sticker" : "Captured image");
+          image.loading = "lazy";
+          visual.appendChild(image);
+        } else {
+          const icon = make("span", "media-icon", media.subtype === "bitmoji" ? "◉" : kind === "image" ? "▧" : kind === "video" ? "▣" : kind === "audio" ? "◖" : "◌");
+          icon.setAttribute("aria-hidden", "true");
+          visual.appendChild(icon);
+        }
+        const caption = make("figcaption", "media-caption");
+        caption.appendChild(make("strong", "", media.label || (isSticker ? "Bitmoji or sticker" : kind === "image" ? "Image" : "Media")));
+        const note = media.path ? "Local asset" : safeHttp(media.source_url) ? "Reference only · not downloaded" : media.placeholder || "No bytes captured";
+        caption.appendChild(make("span", "media-note", note));
+        const sourceUrl = safeHttp(media.source_url);
+        if (sourceUrl) {
+          const link = make("a", "source-link", "Source reference");
+          link.href = sourceUrl;
+          link.target = "_blank";
+          link.rel = "noreferrer noopener";
+          link.setAttribute("aria-label", `Open ${media.label || "media"} source reference`);
+          caption.appendChild(link);
+        }
+        card.append(visual, caption);
+        container.appendChild(card);
       });
+    };
+    const appendMediaSummary = (container, message) => {
+      if (!Array.isArray(message.media) || !message.media.length) return;
+      const summary = make("div", "media-summary");
+      message.media.forEach((media) => {
+        if (!media || typeof media !== "object") return;
+        const item = make("div", "media-summary-item");
+        const kind = media.subtype === "bitmoji" ? "Bitmoji" : media.kind || "Media";
+        const note = media.path ? "Local asset" : safeHttp(media.source_url) ? "Reference only" : media.placeholder || "No bytes captured";
+        item.append(make("strong", "", `${kind} · ${media.label || "Untitled"}`), make("span", "", note));
+        const sourceUrl = safeHttp(media.source_url);
+        if (sourceUrl) {
+          const link = make("a", "source-link", "Source");
+          link.href = sourceUrl;
+          link.target = "_blank";
+          link.rel = "noreferrer noopener";
+          link.setAttribute("aria-label", `Open ${media.label || "media"} source reference`);
+          item.appendChild(link);
+        }
+        summary.appendChild(item);
+      });
+      if (summary.childNodes.length) container.appendChild(summary);
     };
     const appendRefs = (container, message) => {
       if (!Array.isArray(message.source_refs)) return;
@@ -673,6 +1109,14 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     const renderCoverage = () => {
       const banner = clear(byId("coverage-banner"));
       banner.className = `coverage-banner is-${coverage.status || "unverified"}`;
+      const coverageButton = document.querySelector('[data-action="toggle-coverage"]');
+      if (coverageButton) {
+        const status = coverage.status || "unverified";
+        const label = status === "verified" ? "Show verified archive coverage" : status === "partial" ? "Show incomplete archive coverage" : "Show unverified archive coverage";
+        coverageButton.dataset.status = status;
+        coverageButton.setAttribute("aria-label", label);
+        coverageButton.title = label;
+      }
       const header = make("div", "coverage-banner-header");
       const title = make("h2", "coverage-title", coverage.status === "verified" ? "Observed range chain verified" : coverage.status === "partial" ? "Archive is incomplete" : "Coverage is unverified");
       const chip = make("span", "coverage-chip", coverage.status === "verified" ? "Verified range" : coverage.status === "partial" ? "Partial capture" : "Unverified");
@@ -685,10 +1129,40 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     };
     const renderFilters = () => {
       const list = clear(byId("author-filters"));
-      const all = make("button", "filter-button"); all.type = "button"; all.setAttribute("aria-pressed", state.author === "*"); all.append(make("span", "filter-avatar filter-initials", "ALL"), make("span", "", "All authors"), make("span", "filter-count", String(messages.length))); all.addEventListener("click", () => { state.author = "*"; state.windowStart = 0; syncUrlState(); render(); }); const allItem = make("li"); allItem.appendChild(all); list.appendChild(allItem);
+      const ids = authorIds();
+      const summary = authorSelectionSummary();
+      text(byId("author-filter-trigger-label"), summary.label);
+      text(byId("author-filter-status"), summary.status);
+      text(byId("author-filter-count"), String(messages.length));
+      text(byId("author-filter-panel-count"), `${state.authorIds.size} of ${ids.length} selected`);
+      const all = make("button", "author-filter-option");
+      all.type = "button";
+      all.setAttribute("aria-pressed", String(allAuthorsSelected()));
+      all.setAttribute("aria-label", allAuthorsSelected() ? "Hide messages from all authors" : "Show messages from all authors");
+      all.title = allAuthorsSelected() ? "Hide messages from all authors" : "Show messages from all authors";
+      const allToggle = make("span", "filter-toggle"); allToggle.setAttribute("aria-hidden", "true");
+      all.append(make("span", "filter-avatar filter-initials", "ALL"), make("span", "filter-label", "All authors"), make("span", "filter-count", String(messages.length)), allToggle);
+      all.addEventListener("click", () => { state.authorIds = allAuthorsSelected() ? new Set() : new Set(ids); state.windowStart = 0; syncUrlState(); render(); });
+      const allItem = make("li"); allItem.appendChild(all); list.appendChild(allItem);
       participants.forEach((participant, id) => {
         const count = messages.filter((message) => message.author_id === id).length;
-        const button = make("button", "filter-button"); button.type = "button"; button.setAttribute("aria-pressed", state.author === id); button.append(renderAvatar(participant, "filter-avatar"), make("span", "", displayName(id)), make("span", "filter-count", String(count))); button.addEventListener("click", () => { state.author = id; state.windowStart = 0; syncUrlState(); render(); }); const item = make("li"); item.appendChild(button); list.appendChild(item);
+        const selected = state.authorIds.has(id);
+        const button = make("button", "author-filter-option");
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(selected));
+        button.setAttribute("aria-label", `${selected ? "Hide" : "Show"} messages from ${displayName(id)}`);
+        button.title = `${selected ? "Hide" : "Show"} messages from ${displayName(id)}`;
+        const toggle = make("span", "filter-toggle"); toggle.setAttribute("aria-hidden", "true");
+        button.append(renderAvatar(participant, "filter-avatar"), make("span", "filter-label", displayName(id)), make("span", "filter-count", String(count)), toggle);
+        button.addEventListener("click", () => {
+          const next = new Set(state.authorIds);
+          if (next.has(id)) next.delete(id); else next.add(id);
+          state.authorIds = next;
+          state.windowStart = 0;
+          syncUrlState();
+          render();
+        });
+        const item = make("li"); item.appendChild(button); list.appendChild(item);
       });
     };
     const renderCaptureLedger = () => {
@@ -707,12 +1181,45 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       });
       section.appendChild(list);
     };
+    const renderParticipantProfile = (participant) => {
+      const card = make("div", "participant-profile");
+      card.appendChild(renderAvatar(participant, "profile-avatar"));
+      const body = make("div", "profile-body");
+      body.appendChild(make("div", "profile-name", displayName(participant?.id)));
+      const profile = participant?.visible_profile || {};
+      const handle = profile.handle || participant?.username;
+      if (handle && handle !== displayName(participant?.id)) body.appendChild(make("div", "profile-handle", `@${String(handle).replace(/^@/, "")}`));
+      const avatarProvenance = participant?.avatar_provenance || {};
+      const rows = [["Visible label", profile.label], ["Status", profile.status], ["Source ID", profile.source_id], ["Avatar", avatarProvenance.captured ? "Captured locally from visible DOM" : avatarProvenance.method === "reference_only" ? "Reference only; bytes unavailable" : null]].filter(([, value]) => value);
+      if (rows.length) {
+        const details = make("dl", "profile-meta");
+        rows.forEach(([label, value]) => { const row = make("div", "profile-meta-row"); row.append(make("dt", "", label), make("dd", "", value)); details.appendChild(row); });
+        body.appendChild(details);
+      }
+      const avatarUrl = safeHttp(participant?.avatar_ref);
+      const profileUrl = safeHttp(profile.source_url);
+      if (avatarUrl || profileUrl) {
+        const refs = make("div", "evidence-line");
+        if (avatarUrl) {
+          const link = make("a", "source-link", "Avatar reference");
+          link.href = avatarUrl; link.target = "_blank"; link.rel = "noreferrer noopener"; link.setAttribute("aria-label", participant?.avatar_path ? "Open original avatar source reference" : "Open remote avatar reference; image bytes were not captured"); refs.appendChild(link);
+        }
+        if (profileUrl && profileUrl !== avatarUrl) {
+          const link = make("a", "source-link", "Profile reference");
+          link.href = profileUrl; link.target = "_blank"; link.rel = "noreferrer noopener"; link.setAttribute("aria-label", "Open visible profile reference"); refs.appendChild(link);
+        }
+        body.appendChild(refs);
+      }
+      card.appendChild(body);
+      return card;
+    };
     const renderProvenance = (message) => {
       const selected = clear(byId("selected-message"));
       const details = clear(byId("record-details"));
       const evidence = clear(byId("visible-evidence"));
       if (!message) { selected.appendChild(make("p", "panel-note", "No message selected.")); return; }
-      selected.appendChild(make("div", "kicker", "Selected message")); selected.appendChild(make("h3", "", `${displayName(message.author_id)} · ${timeLabel(message.timestamp, state.timestampMode)}`));
+      const participant = participants.get(message.author_id) || { id: message.author_id, display_name: message.author_id };
+      selected.appendChild(make("div", "kicker", "Selected message")); selected.appendChild(renderParticipantProfile(participant)); selected.appendChild(make("h3", "", `Captured at ${timeLabel(message.timestamp, state.timestampMode)}`));
       const detailHeading = make("h3", "", "Record coordinates"); details.appendChild(detailHeading);
       const dl = make("dl", "detail-list");
       const provenance = message.provenance || {};
@@ -721,14 +1228,14 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
       evidence.appendChild(make("h3", "", "Visible evidence"));
       const contentLabel = message.content ? "Visible text" : "Visible text: none";
       evidence.appendChild(make("div", "kicker", contentLabel)); evidence.appendChild(make("p", "detail-copy", message.content || "No visible text was recorded for this row."));
-      const badgeLine = make("div", "evidence-line"); const saved = indicatorBadge(message, "saved_state", "Saved state"); const retention = indicatorBadge(message, "retention", "Retention"); if (saved) badgeLine.appendChild(saved); if (retention) badgeLine.appendChild(retention); appendMedia(badgeLine, message); appendRefs(badgeLine, message); if (badgeLine.childNodes.length) evidence.appendChild(badgeLine);
+      const badgeLine = make("div", "evidence-line"); const saved = indicatorBadge(message, "saved_state", "Saved state"); const retention = indicatorBadge(message, "retention", "Retention"); if (saved) badgeLine.appendChild(saved); if (retention) badgeLine.appendChild(retention); appendRefs(badgeLine, message); if (badgeLine.childNodes.length) evidence.appendChild(badgeLine); appendMediaSummary(evidence, message);
     };
-    const renderMessage = (message) => {
+    const renderMessage = (message, continuation = false) => {
       const participant = participants.get(message.author_id) || { id: message.author_id, display_name: message.author_id };
       const speakerClass = (participantOrder.get(message.author_id) || 0) % 2 ? "speaker-coral" : "speaker-cyan";
-      const row = make("article", `message-row ${speakerClass}`); row.dataset.messageId = message.id; row.dataset.authorId = message.author_id || ""; row.tabIndex = 0; row.setAttribute("aria-label", `${displayName(message.author_id)} message ${timeLabel(message.timestamp, state.timestampMode)}`); row.setAttribute("role", "listitem"); if (state.selected === message.id) row.classList.add("is-selected");
+      const row = make("article", `message-row ${speakerClass}`); row.dataset.messageId = message.id; row.dataset.authorId = message.author_id || ""; row.tabIndex = 0; row.setAttribute("aria-label", `${displayName(message.author_id)} message ${timeLabel(message.timestamp, state.timestampMode)}`); row.setAttribute("role", "listitem"); if (continuation) row.classList.add("is-continuation"); if (state.selected === message.id) row.classList.add("is-selected");
       row.appendChild(renderAvatar(participant, "message-avatar"));
-      const main = make("div", "message-main"); const byline = make("div", "message-byline"); byline.append(make("span", "message-author", displayName(message.author_id)), make("span", "message-id", `#${message.id}`)); main.appendChild(byline);
+      const main = make("div", "message-main"); const byline = make("div", "message-byline"); byline.appendChild(make("span", "message-author", displayName(message.author_id))); const handle = participant.visible_profile?.handle || participant.username; if (handle && handle !== displayName(message.author_id)) byline.appendChild(make("span", "message-username", `@${String(handle).replace(/^@/, "")}`)); byline.appendChild(make("span", "message-id", `#${message.id}`)); main.appendChild(byline);
       const content = make("div", `message-content${message.content ? "" : " is-empty"}`); if (message.content) content.appendChild(contentSearchNode(message.content, state.query)); else content.textContent = message.media?.length ? "Media placeholder — no visible text" : "No visible text recorded"; main.appendChild(content);
       const evidenceLine = make("div", "evidence-line"); const saved = indicatorBadge(message, "saved_state", "Saved"); const retention = indicatorBadge(message, "retention", "Retention"); if (saved) evidenceLine.appendChild(saved); if (retention) evidenceLine.appendChild(retention); appendMedia(evidenceLine, message); appendRefs(evidenceLine, message); if (evidenceLine.childNodes.length) main.appendChild(evidenceLine);
       if (state.selected === message.id) row.setAttribute("aria-current", "true");
@@ -739,45 +1246,140 @@ FORM: Operate/Read three-column archive reader; row selection is the signature i
     };
     const renderMessages = () => {
       const list = clear(byId("message-list")); const filtered = filteredMessages();
-      if (state.selected && !filtered.some((message) => message.id === state.selected)) state.selected = filtered[0]?.id || null;
+      if (state.selected && !filtered.some((message) => message.id === state.selected)) {
+        state.selected = filtered[0]?.id || null;
+        state.edgeTarget = state.selected ? "newest" : "oldest";
+      }
       const selectedIndex = filtered.findIndex((message) => message.id === state.selected);
-      if (selectedIndex >= 0 && (selectedIndex < state.windowStart || selectedIndex >= state.windowStart + windowSize)) state.windowStart = Math.max(0, selectedIndex - Math.floor(windowSize / 2));
+      if (selectedIndex >= 0 && (selectedIndex < state.windowStart || selectedIndex >= state.windowStart + windowSize)) {
+        const maxStart = Math.max(0, filtered.length - windowSize);
+        state.windowStart = selectedIndex === filtered.length - 1 ? maxStart : Math.max(0, selectedIndex - Math.floor(windowSize / 2));
+      }
       const maxStart = Math.max(0, filtered.length - windowSize); state.windowStart = Math.min(state.windowStart, maxStart); const visible = filtered.slice(state.windowStart, state.windowStart + windowSize);
       if (!visible.length) { const empty = make("div", "empty-state"); empty.append(make("strong", "", state.query ? "No matching messages" : "No messages in this view"), make("span", "", state.query ? "Try a different search or clear the author filter." : "The normalized archive contains no visible rows.")); list.appendChild(empty); }
       let lastDate = "";
-      visible.forEach((message) => { const date = dateLabel(message.timestamp, state.timestampMode); if (date !== lastDate) { list.appendChild(make("div", "date-divider", date)); lastDate = date; } list.appendChild(renderMessage(message)); });
-      text(byId("window-status"), visible.length ? `Showing ${state.windowStart + 1}–${state.windowStart + visible.length} of ${filtered.length}` : "Showing 0");
-      byId("older");
-      const older = document.querySelector('[data-action="older"]'); const newer = document.querySelector('[data-action="newer"]'); if (older) older.disabled = state.windowStart <= 0; if (newer) newer.disabled = state.windowStart + visible.length >= filtered.length;
-      text(byId("result-count"), `${filtered.length} ${filtered.length === 1 ? "message" : "messages"}${state.author !== "*" ? ` · ${displayName(state.author)}` : ""}`);
+      let lastAuthor = "";
+      visible.forEach((message) => {
+        const date = dateLabel(message.timestamp, state.timestampMode);
+        if (date !== lastDate) { list.appendChild(make("div", "date-divider", date)); lastDate = date; lastAuthor = ""; }
+        const continuation = lastAuthor === message.author_id;
+        list.appendChild(renderMessage(message, continuation));
+        lastAuthor = message.author_id;
+      });
+      text(byId("window-status"), visible.length ? filtered.length <= windowSize ? `All ${filtered.length} captured rows` : `Showing ${state.windowStart + 1}–${state.windowStart + visible.length} of ${filtered.length}` : "Showing 0");
+      const older = document.querySelector('[data-action="older"]'); const newer = document.querySelector('[data-action="newer"]'); const needsPaging = filtered.length > windowSize; if (older) { older.hidden = !needsPaging; older.disabled = state.windowStart <= 0; older.title = older.disabled ? "Already showing the oldest captured rows" : "Show older captured rows"; } if (newer) { newer.hidden = !needsPaging; newer.disabled = state.windowStart + visible.length >= filtered.length; newer.title = newer.disabled ? "Already showing the newest captured rows" : "Show newer captured rows"; }
+      text(byId("result-count"), `${filtered.length} ${filtered.length === 1 ? "message" : "messages"}${allAuthorsSelected() ? "" : ` · ${authorSelectionLabel()}`}`);
+      renderEdgeButton();
     };
     const renderSelected = () => { renderProvenance(messages.find((message) => message.id === state.selected) || filteredMessages()[0] || null); };
     const render = () => { renderFilters(); renderMessages(); renderSelected(); };
+    const scrollBehavior = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    const scrollToMessage = (message, block = "nearest") => {
+      if (!message) return;
+      const row = document.querySelector(`[data-message-id="${CSS.escape(message.id)}"]`);
+      row?.scrollIntoView({ block, behavior: scrollBehavior() });
+    };
+    const scrollToOldest = () => {
+      const filtered = filteredMessages();
+      const oldest = filtered[0];
+      if (!oldest) return;
+      state.windowStart = 0;
+      state.selected = oldest.id;
+      state.edgeTarget = "newest";
+      syncUrlState();
+      render();
+      requestAnimationFrame(() => scrollToMessage(oldest, "start"));
+    };
+    const scrollToNewest = () => {
+      const filtered = filteredMessages();
+      const newest = filtered[filtered.length - 1];
+      if (!newest) return;
+      state.windowStart = Math.max(0, filtered.length - windowSize);
+      state.selected = newest.id;
+      state.edgeTarget = "oldest";
+      syncUrlState();
+      render();
+      requestAnimationFrame(() => scrollToMessage(newest, "end"));
+    };
+    const renderEdgeButton = () => {
+      const button = document.querySelector('[data-action="edge"]');
+      if (!button) return;
+      const jumpToNewest = state.edgeTarget === "newest";
+      const hasMessages = filteredMessages().length > 0;
+      button.disabled = !hasMessages;
+      button.textContent = jumpToNewest ? "Jump to Newest" : "Scroll to Top";
+      button.setAttribute("aria-label", jumpToNewest ? "Jump to Newest Captured Message" : "Scroll to Oldest Captured Message");
+      button.title = jumpToNewest ? "Jump to the newest captured message" : "Scroll to the oldest captured message";
+    };
     const syncUrlState = () => {
       try {
         const url = new URL(location.href);
         url.searchParams.delete("q"); url.searchParams.delete("author"); url.searchParams.delete("time");
         if (state.query) url.searchParams.set("q", state.query);
-        if (state.author !== "*") url.searchParams.set("author", state.author);
+        if (!allAuthorsSelected()) url.searchParams.set("author", authorIds().filter((id) => state.authorIds.has(id)).join(","));
         if (state.timestampMode === "utc") url.searchParams.set("time", "utc");
         url.hash = state.selected ? `message=${encodeURIComponent(state.selected)}` : "";
         history.replaceState(null, "", url.toString());
       } catch { /* file viewers may not expose a mutable history URL */ }
     };
     const selectMessage = (id, updateHash = true) => {
-      const filtered = filteredMessages(); const index = filtered.findIndex((message) => message.id === id); if (index >= 0 && (index < state.windowStart || index >= state.windowStart + windowSize)) state.windowStart = Math.max(0, index - Math.floor(windowSize / 2)); state.selected = id; if (updateHash) syncUrlState(); render(); requestAnimationFrame(() => document.querySelector(`[data-message-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" }));
+      const filtered = filteredMessages();
+      const index = filtered.findIndex((message) => message.id === id);
+      if (index >= 0 && (index < state.windowStart || index >= state.windowStart + windowSize)) state.windowStart = Math.max(0, index - Math.floor(windowSize / 2));
+      state.selected = id;
+      if (id === filtered[0]?.id) state.edgeTarget = "newest";
+      else if (id === filtered[filtered.length - 1]?.id) state.edgeTarget = "oldest";
+      if (updateHash) syncUrlState();
+      render();
+      requestAnimationFrame(() => document.querySelector(`[data-message-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" }));
     };
-    const readUrlState = () => { const params = new URLSearchParams(location.search); state.query = params.get("q") || ""; const author = params.get("author"); state.author = author && participants.has(author) ? author : "*"; state.timestampMode = params.get("time") === "utc" ? "utc" : "local"; };
+    const readUrlState = () => {
+      const params = new URLSearchParams(location.search);
+      state.query = params.get("q") || "";
+      const requestedAuthors = (params.get("author") || "").split(",").filter((id) => participants.has(id));
+      state.authorIds = new Set(requestedAuthors.length ? requestedAuthors : authorIds());
+      state.timestampMode = params.get("time") === "utc" ? "utc" : "local";
+    };
     const readHash = () => { const match = location.hash.match(/^#message=(.*)$/); if (!match) return; let id = ""; try { id = decodeURIComponent(match[1]); } catch { return; } if (messages.some((message) => message.id === id)) state.selected = id; };
     const wire = () => {
-      text(byId("archive-kind"), String(metadata.kind || "snapchat_chat").replace(/_/g, " ")); text(byId("archive-title"), metadata.title || "Conversation"); text(byId("reader-title"), metadata.title || "Conversation"); text(byId("topbar-thread"), metadata.title || "Conversation"); text(byId("archive-message-count"), messages.length); text(byId("archive-captured-at"), formatCaptured(metadata.captured_at));
-      const threadPath = metadata.thread_identity?.path || metadata.source?.url || "current chat"; text(byId("reader-subtitle"), `Read-only capture · ${threadPath} · ${metadata.display_timezone || "UTC"}`); text(byId("transcript-scope"), coverage.status === "verified" ? "Observed range chain" : "Rendered capture range");
-      byId("search-input").addEventListener("input", (event) => { state.query = event.target.value; state.windowStart = 0; syncUrlState(); render(); }); byId("timestamp-mode").addEventListener("change", (event) => { state.timestampMode = event.target.value; syncUrlState(); render(); });
-      document.querySelector('[data-action="print"]').addEventListener("click", () => window.print()); document.querySelector('[data-action="older"]').addEventListener("click", () => { state.windowStart = Math.max(0, state.windowStart - windowSize); renderMessages(); renderSelected(); }); document.querySelector('[data-action="newer"]').addEventListener("click", () => { state.windowStart += windowSize; renderMessages(); renderSelected(); });
-      document.querySelector('[data-action="toggle-filters"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-filters"); event.currentTarget.setAttribute("aria-expanded", String(expanded)); }); document.querySelector('[data-action="toggle-provenance"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-provenance"); event.currentTarget.setAttribute("aria-expanded", String(expanded)); });
+      const headerParticipants = Array.from(participants.values());
+      const headerParticipant = headerParticipants.find((participant) => !/^me$/i.test(displayName(participant?.id))) || headerParticipants[0];
+      const headerAvatar = byId("chat-header-avatar");
+      if (headerParticipant && headerAvatar) {
+        const avatarPath = safePath(headerParticipant.avatar_path);
+        if (avatarPath) {
+          const image = document.createElement("img");
+          image.className = "chat-header-avatar";
+          image.width = 36;
+          image.height = 36;
+          image.src = avatarPath;
+          image.alt = headerParticipant.avatar_alt || `${displayName(headerParticipant.id)} avatar`;
+          image.loading = "eager";
+          headerAvatar.replaceWith(image);
+        } else {
+          text(headerAvatar, initials(displayName(headerParticipant.id)));
+          headerAvatar.title = headerParticipant.avatar_ref ? "Remote avatar reference; image bytes were not captured." : `${displayName(headerParticipant.id)} avatar not captured.`;
+        }
+      }
+      text(byId("archive-kind"), String(metadata.kind || "snapchat_chat").replace(/_/g, " ")); text(byId("archive-title"), metadata.title || "Conversation"); text(byId("reader-title"), metadata.title || "Conversation"); text(byId("archive-message-count"), messages.length); text(byId("archive-captured-at"), formatCaptured(metadata.captured_at));
+      const threadPath = metadata.thread_identity?.path || metadata.source?.url || "current chat"; text(byId("reader-subtitle"), `Captured range · ${threadPath}`); text(byId("transcript-scope"), coverage.status === "verified" ? "Observed range chain" : "Rendered capture range");
+      const syncTimeControl = () => {
+        const control = byId("timestamp-mode");
+        const wrapper = control?.closest(".time-control");
+        const label = state.timestampMode === "utc" ? "UTC time" : "Local time";
+        if (control) control.title = label;
+        if (wrapper) wrapper.title = `Timestamp display: ${label}`;
+      };
+      byId("search-input").addEventListener("input", (event) => { state.query = event.target.value; state.windowStart = 0; syncUrlState(); render(); });
+      byId("timestamp-mode").addEventListener("change", (event) => { state.timestampMode = event.target.value; syncTimeControl(); syncUrlState(); render(); });
+      const syncDisclosureButton = (event, expanded, openLabel, closeLabel) => { const label = expanded ? closeLabel : openLabel; event.currentTarget.setAttribute("aria-expanded", String(expanded)); event.currentTarget.setAttribute("aria-label", label); event.currentTarget.title = label; };
+      document.querySelector('[data-action="print"]').addEventListener("click", () => window.print());
+      document.querySelector('[data-action="toggle-coverage"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-coverage"); syncDisclosureButton(event, expanded, "Show archive coverage status", "Hide archive coverage status"); });
+      document.querySelector('[data-action="edge"]').addEventListener("click", () => { if (state.edgeTarget === "newest") scrollToNewest(); else scrollToOldest(); }); document.querySelector('[data-action="older"]').addEventListener("click", () => { state.windowStart = Math.max(0, state.windowStart - windowSize); renderMessages(); renderSelected(); }); document.querySelector('[data-action="newer"]').addEventListener("click", () => { state.windowStart += windowSize; renderMessages(); renderSelected(); });
+      document.querySelector('[data-action="toggle-filters"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-filters"); syncDisclosureButton(event, expanded, "Show message visibility controls", "Hide message visibility controls"); }); document.querySelector('[data-action="toggle-provenance"]').addEventListener("click", (event) => { const expanded = document.body.classList.toggle("show-provenance"); syncDisclosureButton(event, expanded, "Show evidence drawer", "Hide evidence drawer"); });
       document.addEventListener("keydown", (event) => { if (event.key === "/" && document.activeElement?.tagName !== "INPUT") { event.preventDefault(); byId("search-input").focus(); } });
       window.addEventListener("hashchange", () => { readUrlState(); readHash(); render(); });
-      renderCoverage(); renderCaptureLedger(); readUrlState(); byId("search-input").value = state.query; byId("timestamp-mode").value = state.timestampMode; readHash(); state.selected = state.selected || messages[0]?.id || null; syncUrlState(); render();
+      renderCoverage(); renderCaptureLedger(); readUrlState(); byId("search-input").value = state.query; byId("timestamp-mode").value = state.timestampMode; syncTimeControl(); readHash(); const hasDeepLink = Boolean(state.selected); const initialFiltered = filteredMessages(); state.selected = state.selected || initialFiltered[initialFiltered.length - 1]?.id || null; state.edgeTarget = state.selected === initialFiltered[0]?.id ? "newest" : "oldest"; if (!hasDeepLink) state.windowStart = Math.max(0, initialFiltered.length - windowSize); syncUrlState(); render(); if (!hasDeepLink) requestAnimationFrame(() => scrollToMessage(initialFiltered[initialFiltered.length - 1], "end")); else requestAnimationFrame(() => scrollToMessage(initialFiltered.find((message) => message.id === state.selected), "nearest"));
     };
     wire();
   })();

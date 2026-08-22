@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import html
 import json
@@ -10,7 +12,7 @@ import sysconfig
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote_to_bytes, urlparse
 from zoneinfo import ZoneInfo
 
 
@@ -19,8 +21,22 @@ _MISSING = object()
 _TIMESTAMP_OFFSET = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$", re.IGNORECASE)
 _CONTENT_KINDS = frozenset({"visible_text", "media_placeholder", "mixed", "empty"})
 _MEDIA_KINDS = frozenset({"image", "video", "audio", "file", "sticker", "snap", "unknown"})
+_MEDIA_KIND_ALIASES = {
+    "bitmoji": "sticker",
+    "gif": "image",
+    "photo": "image",
+    "picture": "image",
+    "snapchat": "snap",
+}
 _SAVED_STATES = frozenset({"saved", "unsaved", "unknown"})
 _RETENTION_STATES = frozenset({"kept_in_chat", "view_once", "expires", "unknown"})
+_AVATAR_DATA_MAX_BYTES = 4 * 1024 * 1024
+_AVATAR_DATA_MIME_EXTENSIONS = {
+    "image/gif": "gif",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+}
 
 
 def _load_json_value(path: Path) -> Any:
@@ -128,10 +144,40 @@ def _validate_media(value: Any, field: str, errors: list[str]) -> None:
         errors.append(f"{field}.placeholder must be a string or null")
     if value.get("alt") is not None and not isinstance(value["alt"], str):
         errors.append(f"{field}.alt must be a string or null")
+    for key in ("subtype", "source_element"):
+        if value.get(key) is not None and not isinstance(value[key], str):
+            errors.append(f"{field}.{key} must be a string or null")
+    for key in ("width", "height"):
+        if value.get(key) is not None:
+            dimension = value[key]
+            if isinstance(dimension, bool) or not isinstance(dimension, int) or dimension < 0:
+                errors.append(f"{field}.{key} must be a non-negative integer or null")
     if value.get("size_bytes") is not None:
         size = value["size_bytes"]
         if isinstance(size, bool) or not isinstance(size, int) or size < 0:
             errors.append(f"{field}.size_bytes must be a non-negative integer or null")
+
+
+def _validate_visible_profile(value: Any, field: str, errors: list[str]) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{field} must be an object or null")
+        return
+    for key in ("handle", "label", "status", "source_id"):
+        if value.get(key) is not None and not isinstance(value[key], str):
+            errors.append(f"{field}.{key} must be a string or null")
+    if value.get("source_url") is not None and not _is_http_url(value["source_url"]):
+        errors.append(f"{field}.source_url must be an HTTP(S) URL or null")
+
+
+def _validate_avatar_provenance(value: Any, field: str, errors: list[str]) -> None:
+    if not isinstance(value, dict):
+        errors.append(f"{field} must be an object or null")
+        return
+    for key in ("kind", "method", "note"):
+        if value.get(key) is not None and not isinstance(value[key], str):
+            errors.append(f"{field}.{key} must be a string or null")
+    if value.get("captured") is not None and not isinstance(value["captured"], bool):
+        errors.append(f"{field}.captured must be boolean")
 
 
 def _validate_indicator(value: Any, field: str, states: frozenset[str], errors: list[str]) -> None:
@@ -214,6 +260,16 @@ def _validate_capture_range(value: Any, field: str, errors: list[str]) -> None:
         or any(not isinstance(note, str) for note in value["selector_notes"])
     ):
         errors.append(f"{field}.selector_notes must be an array of strings")
+    if "ranges" in value:
+        if not isinstance(value["ranges"], list) or any(not isinstance(item, dict) for item in value["ranges"]):
+            errors.append(f"{field}.ranges must be an array of objects")
+        else:
+            for index, item in enumerate(value["ranges"]):
+                if "message_ids" in item and (
+                    not isinstance(item["message_ids"], list)
+                    or any(not isinstance(message_id, str) or not message_id.strip() for message_id in item["message_ids"])
+                ):
+                    errors.append(f"{field}.ranges[{index}].message_ids must be an array of non-empty strings")
 
 
 def _validate_coverage(value: Any, field: str, errors: list[str]) -> None:
@@ -229,7 +285,7 @@ def _validate_coverage(value: Any, field: str, errors: list[str]) -> None:
             count = value[key]
             if isinstance(count, bool) or not isinstance(count, int) or count < 0:
                 errors.append(f"{field}.{key} must be a non-negative integer")
-    for key in ("start_confirmed", "end_confirmed", "ranges_linked"):
+    for key in ("start_confirmed", "end_confirmed", "ranges_linked", "range_boundaries_changed", "repeated_boundaries"):
         if key in value and not isinstance(value[key], bool):
             errors.append(f"{field}.{key} must be boolean")
     if "notes" in value and (
@@ -339,6 +395,10 @@ def validate_archive(archive: Any) -> list[str]:
                 _validate_local_reference(participant["avatar_path"], f"participants[{index}].avatar_path", errors)
             if participant.get("avatar_ref") is not None and not _is_http_url(participant["avatar_ref"]):
                 errors.append(f"participants[{index}].avatar_ref must be an HTTP(S) URL")
+            if "avatar_provenance" in participant and participant["avatar_provenance"] is not None:
+                _validate_avatar_provenance(participant["avatar_provenance"], f"participants[{index}].avatar_provenance", errors)
+            if "visible_profile" in participant and participant["visible_profile"] is not None:
+                _validate_visible_profile(participant["visible_profile"], f"participants[{index}].visible_profile", errors)
 
     messages = archive.get("messages")
     if not isinstance(messages, list):
@@ -436,11 +496,17 @@ def _normalise_media(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {"kind": "unknown", "label": "Media", "placeholder": str(value)}
     raw_kind = _first(value, "kind", "type", "media_type", default=None)
-    kind = str(raw_kind).lower().strip() if raw_kind else "unknown"
+    raw_kind_text = str(raw_kind).lower().strip() if raw_kind else "unknown"
+    kind = _MEDIA_KIND_ALIASES.get(raw_kind_text, raw_kind_text)
     if kind not in _MEDIA_KINDS:
-        kind = _media_kind(_first(value, "name", "filename", "label", default="media"))
+        kind = _media_kind(_first(value, "name", "filename", "label", "alt", default="media"))
     label = _first(value, "label", "name", "filename", "alt", default=None)
     result = {"kind": kind, "label": _clean(label or kind.title())}
+    subtype = _first(value, "subtype", "media_subtype", default=None)
+    if raw_kind_text == "bitmoji" or (isinstance(subtype, str) and subtype.casefold().strip() == "bitmoji"):
+        result["subtype"] = "bitmoji"
+    elif subtype is not None and str(subtype).strip():
+        result["subtype"] = _clean(subtype)
     path = _first(value, "path", "local_path", default=None)
     source_url = _first(value, "source_url", "url", "ref", "source_ref", default=None)
     if _normalise_local_reference(path):
@@ -455,6 +521,13 @@ def _normalise_media(value: Any) -> dict[str, Any]:
     alt = _first(value, "alt", "alt_text", default=None)
     if alt is not None:
         result["alt"] = _clean(alt)
+    source_element = _first(value, "source_element", "element", default=None)
+    if source_element is not None and str(source_element).strip():
+        result["source_element"] = _clean(source_element)
+    for key in ("width", "height"):
+        dimension = value.get(key)
+        if isinstance(dimension, int) and not isinstance(dimension, bool) and dimension >= 0:
+            result[key] = dimension
     size = _first(value, "size_bytes", "size", default=None)
     if isinstance(size, int) and not isinstance(size, bool) and size >= 0:
         result["size_bytes"] = size
@@ -462,6 +535,9 @@ def _normalise_media(value: Any) -> dict[str, Any]:
 
 
 def _media_kind(value: Any) -> str:
+    value_text = str(value or "").casefold()
+    if "bitmoji" in value_text or "sticker" in value_text:
+        return "sticker"
     extension = Path(str(value).split("?", 1)[0].split("#", 1)[0]).suffix.lower().lstrip(".")
     if extension in {"png", "jpg", "jpeg", "gif", "webp", "svg", "heic"}:
         return "image"
@@ -469,7 +545,7 @@ def _media_kind(value: Any) -> str:
         return "video"
     if extension in {"mp3", "wav", "ogg", "m4a"}:
         return "audio"
-    if extension in {"webp", "tgs"}:
+    if extension in {"tgs"}:
         return "sticker"
     return "unknown"
 
@@ -528,6 +604,60 @@ def _normalise_source_ref(value: Any) -> dict[str, Any] | None:
     return result
 
 
+def _decode_avatar_data_url(value: Any) -> tuple[bytes, str] | None:
+    if not isinstance(value, str) or not value.lower().startswith("data:") or "," not in value:
+        return None
+    header, payload = value.split(",", 1)
+    parts = header[5:].split(";")
+    mime = parts[0].strip().lower()
+    extension = _AVATAR_DATA_MIME_EXTENSIONS.get(mime)
+    if not extension:
+        return None
+    try:
+        if any(part.strip().lower() == "base64" for part in parts[1:]):
+            data = base64.b64decode(re.sub(r"\s+", "", payload), validate=True)
+        else:
+            data = unquote_to_bytes(payload)
+    except (ValueError, binascii.Error):
+        return None
+    if not data or len(data) > _AVATAR_DATA_MAX_BYTES:
+        return None
+    return data, extension
+
+
+def _materialize_avatar_data_url(participant: dict[str, Any], record: dict[str, Any], output_root: Path, index: int) -> None:
+    avatar_object = record.get("avatar") if isinstance(record.get("avatar"), dict) else {}
+    data_url = _first(record, "avatar_data_url", "avatarDataUrl", default=None)
+    if data_url is None:
+        data_url = _first(avatar_object, "data_url", "dataUrl", default=None)
+    capture_method = _first(record, "avatar_capture_method", "avatarCaptureMethod", default=None)
+    capture_method = _clean(capture_method) if capture_method else "visible_dom_data_url"
+    decoded = _decode_avatar_data_url(data_url)
+    if decoded and not participant.get("avatar_path"):
+        data, extension = decoded
+        stem = re.sub(r"[^a-z0-9]+", "-", str(participant.get("id") or f"participant-{index + 1}").lower()).strip("-") or f"participant-{index + 1}"
+        digest = hashlib.sha256(data).hexdigest()[:12]
+        reference = f"assets/avatars/{stem}-{digest}.{extension}"
+        destination = output_root / reference
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if not destination.is_file() or destination.read_bytes() != data:
+            destination.write_bytes(data)
+        participant["avatar_path"] = reference
+        participant["avatar_provenance"] = {
+            "kind": "visible_dom_avatar",
+            "method": capture_method,
+            "captured": True,
+            "note": "Image bytes were materialized from the displayed avatar data without a remote fetch.",
+        }
+    elif participant.get("avatar_ref"):
+        participant["avatar_provenance"] = {
+            "kind": "visible_dom_avatar",
+            "method": "reference_only",
+            "captured": False,
+            "note": "The avatar reference was visible, but image bytes were not readable without a remote fetch.",
+        }
+
+
 def _normalise_transcript_participant(record: dict[str, Any], index: int) -> dict[str, Any]:
     participant_id = _first(record, "id", "user_id", "author_id", "sender_id", "userId", default=None)
     display_name = _first(record, "display_name", "displayName", "name", "label", default=None)
@@ -541,8 +671,9 @@ def _normalise_transcript_participant(record: dict[str, Any], index: int) -> dic
         participant["username"] = _clean(username)
     avatar = _first(record, "avatar_path", "avatar_file", "avatar", default=None)
     avatar_ref = _first(record, "avatar_ref", "avatar_url", default=None)
+    avatar_object = avatar if isinstance(avatar, dict) else {}
     if isinstance(avatar, dict):
-        avatar = _first(avatar, "path", "local_path", "url", default=None)
+        avatar = _first(avatar, "path", "local_path", "url", "source_url", "href", default=None)
     if _is_http_url(avatar):
         avatar_ref = avatar
     elif _normalise_local_reference(avatar):
@@ -550,8 +681,22 @@ def _normalise_transcript_participant(record: dict[str, Any], index: int) -> dic
     if _is_http_url(avatar_ref):
         participant["avatar_ref"] = str(avatar_ref).strip()
     avatar_alt = _first(record, "avatar_alt", "avatarAlt", default=None)
+    if avatar_alt is None:
+        avatar_alt = _first(avatar_object, "alt", "alt_text", default=None)
     if avatar_alt is not None:
         participant["avatar_alt"] = _clean(avatar_alt)
+    visible_profile = _first(record, "visible_profile", "profile", "user_metadata", default=None)
+    if isinstance(visible_profile, dict):
+        profile: dict[str, Any] = {}
+        for key in ("handle", "label", "status", "source_id"):
+            value = visible_profile.get(key)
+            if value is not None and str(value).strip():
+                profile[key] = _clean(value)
+        source_url = visible_profile.get("source_url")
+        if _is_http_url(source_url):
+            profile["source_url"] = str(source_url).strip()
+        if profile:
+            participant["visible_profile"] = profile
     return participant
 
 
@@ -583,6 +728,7 @@ def _author_details(record: dict[str, Any]) -> tuple[str, bool, dict[str, Any]]:
         "username": _first(author_object, "username", "user_name", "handle", default=None),
         "avatar_path": _first(author_object, "avatar_path", "avatar_file", "avatar_ref", "avatar_url", default=None),
         "avatar_alt": _first(author_object, "avatar_alt", "avatarAlt", default=None),
+        "visible_profile": _first(author_object, "visible_profile", "profile", "user_metadata", default=None),
     }
     if details["display_name"] is None and details["username"] is None and isinstance(author_value, str):
         details["display_name"] = author_value.strip()
@@ -750,6 +896,44 @@ def _capture_range_summary(source_file: str, records: list[dict[str, Any]], meta
     }
 
 
+def _capture_range_summaries(source_file: str, records: list[dict[str, Any]], metadata: dict[str, Any]) -> list[dict[str, Any]]:
+    capture_range = metadata.get("capture_range") if isinstance(metadata.get("capture_range"), dict) else {}
+    nested_ranges = capture_range.get("ranges") if isinstance(capture_range, dict) else None
+    if not isinstance(nested_ranges, list) or not nested_ranges:
+        return [_capture_range_summary(source_file, records, metadata)]
+
+    summaries: list[dict[str, Any]] = []
+    for index, nested in enumerate(nested_ranges):
+        if not isinstance(nested, dict):
+            continue
+        raw_ids = nested.get("message_ids")
+        message_ids = {
+            str(message_id).strip()
+            for message_id in (raw_ids if isinstance(raw_ids, list) else [])
+            if isinstance(message_id, str) and message_id.strip()
+        }
+        summaries.append(
+            {
+                "source_file": f"{source_file}#range-{index + 1:03d}",
+                "message_count": len(message_ids),
+                "rendered_count": nested.get("rendered_count", len(message_ids)),
+                "message_ids": message_ids,
+                "oldest_message_id": nested.get("oldest_message_id"),
+                "oldest_timestamp": nested.get("oldest_timestamp"),
+                "newest_message_id": nested.get("newest_message_id"),
+                "newest_timestamp": nested.get("newest_timestamp"),
+                "at_start": bool(nested.get("at_start")),
+                "at_end": bool(nested.get("at_end")),
+                "has_capture_range": True,
+                "selector": nested.get("selector"),
+                "scroll_top": nested.get("scroll_top"),
+                "scroll_height": nested.get("scroll_height"),
+                "viewport_height": nested.get("viewport_height"),
+            }
+        )
+    return summaries or [_capture_range_summary(source_file, records, metadata)]
+
+
 def _coverage_report(
     ranges: list[dict[str, Any]],
     duplicate_count: int = 0,
@@ -791,8 +975,14 @@ def _coverage_report(
         previous_ids = ids
     first = ordered[0] if ordered else {}
     last = ordered[-1] if ordered else {}
-    start_confirmed = bool(reached_start or first.get("at_start"))
-    end_confirmed = bool(reached_end or last.get("at_end"))
+    start_confirmed = bool(reached_start or any(item.get("at_start") for item in ordered))
+    end_confirmed = bool(reached_end or any(item.get("at_end") for item in ordered))
+    boundary_keys = {
+        (item.get("oldest_message_id"), item.get("newest_message_id"))
+        for item in ordered
+        if item.get("oldest_message_id") or item.get("newest_message_id")
+    }
+    repeated_boundaries = len(ordered) > 1 and len(boundary_keys) <= 1
     all_ranges_tagged = bool(ordered) and all(
         item.get("has_capture_range") and item.get("oldest_message_id") and item.get("newest_message_id")
         for item in ordered
@@ -811,6 +1001,8 @@ def _coverage_report(
         notes.append("The newest boundary has not been confirmed; capture a range at the bottom of the open chat.")
     if unlinked_ranges:
         notes.append("Adjacent capture ranges do not overlap; recapture those transitions with at least one shared message.")
+    if repeated_boundaries:
+        notes.append("Every walked range reported the same oldest/newest message boundaries; this is consistent with a non-virtualized rendered DOM, but unseen or deleted history remains unknown.")
     if conflict_count:
         notes.append("Overlapping ranges contain conflicting records; review the source captures before treating coverage as complete.")
     notes.append("Range verification only describes messages rendered in the user-controlled DOM; unseen or deleted messages remain unknown.")
@@ -839,6 +1031,8 @@ def _coverage_report(
         "start_confirmed": start_confirmed,
         "end_confirmed": end_confirmed,
         "ranges_linked": linked,
+        "range_boundaries_changed": not repeated_boundaries,
+        "repeated_boundaries": repeated_boundaries,
         "unlinked_ranges": unlinked_ranges,
         "ranges": public_ranges,
         "notes": notes,
@@ -849,6 +1043,54 @@ def _coverage_report(
 def _message_fingerprint(record: dict[str, Any]) -> str:
     comparable = {key: value for key, value in record.items() if key not in {"grouped", "provenance"}}
     return json.dumps(comparable, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _merge_capture_participant(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+    """Preserve the richest visible participant metadata across overlapping ranges."""
+
+    for key, item in incoming.items():
+        if key == "visible_profile" and isinstance(item, dict):
+            profile = existing.setdefault("visible_profile", {})
+            if isinstance(profile, dict):
+                for profile_key, profile_value in item.items():
+                    if profile_value not in (None, "") and profile.get(profile_key) in (None, ""):
+                        profile[profile_key] = profile_value
+            continue
+        if item not in (None, "") and existing.get(key) in (None, ""):
+            existing[key] = item
+
+
+def _merge_capture_message(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+    """Merge complementary visible fields without hiding overlap conflicts."""
+
+    for key in ("content", "content_kind", "saved_state", "retention", "reply_to", "message_link"):
+        if incoming.get(key) not in (None, "") and existing.get(key) in (None, ""):
+            existing[key] = incoming[key]
+    for key in ("media", "source_refs"):
+        incoming_items = incoming.get(key)
+        if not isinstance(incoming_items, list):
+            continue
+        existing_items = existing.get(key)
+        if not isinstance(existing_items, list):
+            existing_items = []
+        merged_items = existing_items + incoming_items
+        existing[key] = list(
+            {
+                json.dumps(item, ensure_ascii=False, sort_keys=True, default=str): item
+                for item in merged_items
+            }.values()
+        )
+    incoming_provenance = incoming.get("provenance")
+    if isinstance(incoming_provenance, dict):
+        provenance = existing.setdefault("provenance", {})
+        if isinstance(provenance, dict):
+            for key, item in incoming_provenance.items():
+                if key == "notes" and isinstance(item, list):
+                    current = provenance.setdefault("notes", [])
+                    if isinstance(current, list):
+                        provenance["notes"] = list(dict.fromkeys([*current, *item]))
+                elif item not in (None, "") and provenance.get(key) in (None, ""):
+                    provenance[key] = item
 
 
 def merge_transcripts(
@@ -901,7 +1143,7 @@ def merge_transcripts(
         value = _load_json_value(capture_path)
         records = _transcript_records(value)
         metadata = _transcript_metadata(value)
-        ranges.append(_capture_range_summary(capture_path.name, records, metadata))
+        ranges.extend(_capture_range_summaries(capture_path.name, records, metadata))
         thread_id = metadata.get("thread_id") or metadata.get("channel_id")
         if thread_id is not None:
             thread_ids.add(str(thread_id))
@@ -921,9 +1163,7 @@ def merge_transcripts(
                 if not participant_id:
                     continue
                 existing = participants_by_id.setdefault(participant_id, {})
-                for key, item in participant.items():
-                    if item not in (None, "") and existing.get(key) in (None, ""):
-                        existing[key] = item
+                _merge_capture_participant(existing, participant)
         for index, record in enumerate(records):
             message_id = _raw_message_id(record, index) or _message_digest(record, index)
             existing = messages_by_id.get(message_id)
@@ -933,6 +1173,7 @@ def merge_transcripts(
             duplicate_count += 1
             if _message_fingerprint(existing) != _message_fingerprint(record):
                 conflict_count += 1
+            _merge_capture_message(existing, record)
             if existing.get("grouped") is True and record.get("grouped") is False:
                 existing["grouped"] = False
 
@@ -977,16 +1218,10 @@ def verify_transcript_coverage(input_path: Path) -> dict[str, Any]:
     capture_range = metadata.get("capture_range")
     records = _transcript_records(archive)
     if isinstance(capture_range, dict):
-        oldest = capture_range.get("oldest_message_id")
-        newest = capture_range.get("newest_message_id")
         return _coverage_report(
-            [
-                {
-                    **_capture_range_summary(input_path.name, records, metadata),
-                    "oldest_message_id": oldest or _capture_range_summary(input_path.name, records, metadata).get("oldest_message_id"),
-                    "newest_message_id": newest or _capture_range_summary(input_path.name, records, metadata).get("newest_message_id"),
-                }
-            ]
+            _capture_range_summaries(input_path.name, records, metadata),
+            reached_start=bool(capture_range.get("at_start")),
+            reached_end=bool(capture_range.get("at_end")),
         )
     return {
         "version": 1,
@@ -1037,6 +1272,7 @@ def import_transcript(input_path: Path, output_path: Path) -> dict[str, Any]:
         if not isinstance(participant_record, dict):
             raise ValueError(f"Transcript participants[{index}] must be an object")
         participant = _normalise_transcript_participant(participant_record, index)
+        _materialize_avatar_data_url(participant, participant_record, output_path.resolve().parent, index)
         if participant["id"] in participant_by_id:
             raise ValueError(f"Transcript participants[{index}] duplicates {participant['id']!r}")
         participant_by_id[participant["id"]] = participant
@@ -1087,6 +1323,14 @@ def import_transcript(input_path: Path, output_path: Path) -> dict[str, Any]:
     for field in ("capture_range", "coverage"):
         if isinstance(input_metadata.get(field), dict):
             metadata[field] = input_metadata[field]
+    if "coverage" not in metadata and isinstance(input_metadata.get("capture_range"), dict):
+        capture_range = input_metadata["capture_range"]
+        if isinstance(capture_range.get("ranges"), list) and capture_range["ranges"]:
+            metadata["coverage"] = _coverage_report(
+                _capture_range_summaries(input_path.name, records, input_metadata),
+                reached_start=bool(capture_range.get("at_start")),
+                reached_end=bool(capture_range.get("at_end")),
+            )
     if input_metadata.get("synthetic") is True or (isinstance(value, dict) and value.get("synthetic") is True):
         metadata["synthetic"] = True
     if metadata.get("thread_identity") is None:

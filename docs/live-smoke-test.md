@@ -10,16 +10,20 @@ Codex in-app browser; use the same procedure for each new Snapchat Web layout:
    search, navigate, click, expand, or discover another chat.
 3. Run the read-only evaluate surface with the contents of
    `tools/snapchat_visible_capture.js` and no options for the current range.
-4. For the next range, explicitly invoke the same adapter with one option,
-   `{scroll: "older"}` or `{scroll: "newer"}`. This moves the current chat's
-   visible message scroller by one bounded step, waits for the foreground DOM
-   to settle, and captures that range. Repeat only when the user starts the
-   next action; the adapter never runs a background loop.
+4. To test attended capture without manual scroll input, explicitly invoke the
+   adapter with `{walk: "older", max_steps: 40}` (or `newer`). It moves the
+   current chat's visible message scroller by one bounded step, waits for the
+   foreground DOM to settle, captures that range, and repeats only within this
+   user-triggered foreground run. It stops at a boundary, no progress, or the
+   step cap; it never runs a background loop. Use `{scroll: "older"}` or
+   `{scroll: "newer"}` when validating one step only.
 5. Inspect the returned `metadata.source.selector_notes`,
    `metadata.thread_identity`, `metadata.capture_range`, and the first/last
-   message IDs and timestamps. Confirm `capture_range.scroll_action` reports
-   the requested direction and whether the scroll moved, and confirm every
-   row is from the current chat, not the sidebar or a notification surface.
+   message IDs and timestamps. For a walk, confirm
+   `capture_range.scroll_walk` reports the stop reason and range count; for a
+   single step, confirm `capture_range.scroll_action` reports the requested
+   direction and whether the scroll moved. Confirm every row is from the
+   current chat, not the sidebar or a notification surface.
 6. Save each returned object under `private-data\range-001.json`, run
    `python -m catchthat import-capture ...`, and validate/build it.
 
@@ -43,17 +47,47 @@ exposed, the capture reports selector notes and skips uncertain rows rather
 than inventing dates or silently claiming coverage. Adjustments should remain
 DOM-only and read-only.
 
+For media, inspect the returned `messages[].media` entries and
+`participants[].visible_profile` values during the smoke test. The adapter
+preserves visible image/video/audio/sticker/Bitmoji kind, subtype, alt text,
+dimensions, source element, remote source reference, avatar reference, handle,
+status, label, and visible source ID. A displayed avatar may additionally
+include a bounded `avatar_data_url` when already-rendered pixels were readable;
+`import-capture` turns that into a local `assets/avatars/` file and records
+`avatar_provenance`. No remote fetch is used. Confirm that a message image or
+Bitmoji is not incorrectly classified as the sender avatar, and that any
+visible profile metadata belongs to the current conversation row. When the
+page blocks pixel reads, confirm the viewer honestly falls back to initials or
+the explicit reference-only state.
+
 The Rick Bailer smoke test captured six timestamped visible rows, skipped one
 visible row without a timezone-aware timestamp, and correctly reported a
 partial range (`at_start: false`, `at_end: true`). The resulting raw capture
 and normalized archive were validated and built locally under ignored
 `private-data/`; they were not committed or pushed.
 
-A longer authorized Aiden Lautt smoke test also validated the attended scroll
-path: one `{scroll: "older"}` invocation selected the conversation pane, moved
-the visible range by one bounded step, returned 62 timestamped rows, and
-reported both boundaries as unconfirmed. The live result was treated as
-private and was not committed or pushed.
+A longer authorized Aiden Lautt smoke test validated the attended walk path
+without manual scroll input: `{walk: "older", max_steps: 40}` selected the
+conversation pane, executed 21 bounded steps, reached the oldest boundary, and
+merged 22 rendered ranges into 62 timestamped message rows. The newest boundary
+was not established because the run began below it. A reverse `{walk: "newer"}`
+pass reached the newest boundary in 22 steps, but all 23 range summaries had the
+same message boundaries. That means the current Snapchat DOM kept exposing the
+same 62 valid message rows while the pane moved; additional history/loading was
+not verified by this run. A fresh two-direction pass reached both boundaries and
+saved 23 ranges per direction, but the coverage verifier intentionally kept the
+normalized archive’s caveat because the rendered boundaries never changed. The
+archive is verified for the observed, overlap-linked rendered range, while the
+source notes still distinguish that from unseen or deleted history. The live
+result was treated as private and was not committed or pushed.
+
+A follow-up Aiden run against the currently open chat captured the same 62
+timestamped rows at the oldest visible boundary (`at_start: true`,
+`at_end: false`). It preserved seven visible link-preview thumbnails and
+excluded seven decorative favicon nodes; two visible participants were
+retained with their visible labels. The normalized result is under ignored
+`private-data\\aiden-media-run-20260821.*` and remains a partial range, not a
+complete-chat claim.
 
 If the browser is logged out, stop at the synthetic smoke build in the README;
 do not attempt credential entry through CatchThat.

@@ -84,14 +84,27 @@
       "display_name": "Mara",
       "username": "mara",
       "avatar_path": "assets/avatars/mara.svg",
-      "avatar_alt": "Mara synthetic avatar"
+      "avatar_alt": "Mara synthetic avatar",
+      "visible_profile": {
+        "handle": "mara",
+        "label": "Mara",
+        "status": "Active",
+        "source_id": "user-mara"
+      }
     },
     {
       "id": "eli",
       "display_name": "Eli",
       "username": "eli",
       "avatar_path": "assets/avatars/eli.svg",
-      "avatar_alt": "Eli synthetic avatar"
+      "avatar_alt": "Eli synthetic avatar",
+      "avatar_ref": "https://example.invalid/avatars/eli.webp",
+      "visible_profile": {
+        "handle": "eli",
+        "label": "Eli",
+        "status": "Away",
+        "source_id": "user-eli"
+      }
     }
   ],
   "messages": [
@@ -161,7 +174,8 @@
         {
           "kind": "image",
           "label": "recipe-screenshot.png",
-          "placeholder": "Image visible in source; bytes were not captured.",
+          "path": "assets/media/recipe-screenshot.svg",
+          "placeholder": "Synthetic local image asset supplied for offline viewer QA.",
           "alt": "Synthetic recipe screenshot"
         }
       ],
@@ -175,7 +189,7 @@
         "source_file": "synthetic-range.json",
         "record_index": 3,
         "source_id": "snap-004",
-        "notes": ["Media is intentionally a placeholder; no bytes are present."]
+        "notes": ["Synthetic local image asset is supplied for offline viewer QA."]
       }
     },
     {
@@ -183,7 +197,17 @@
       "author_id": "mara",
       "timestamp": "2024-03-10T01:42:00Z",
       "content": "Got it, thanks!",
-      "content_kind": "visible_text",
+      "content_kind": "mixed",
+      "media": [
+        {
+          "kind": "sticker",
+          "subtype": "bitmoji",
+          "label": "Bitmoji wave",
+          "path": "assets/media/bitmoji-wave.svg",
+          "placeholder": "Synthetic local Bitmoji asset supplied for offline viewer QA.",
+          "alt": "Synthetic Bitmoji waving"
+        }
+      ],
       "source_refs": [],
       "provenance": {
         "source_file": "synthetic-range.json",
@@ -224,4 +248,3 @@
     }
   ]
 }
-

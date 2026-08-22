@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Synthetic Bitmoji wave</title>
+  <desc id="desc">A simple synthetic Bitmoji-style face waving from a yellow chat bubble.</desc>
+  <circle cx="64" cy="64" r="58" fill="#fffc00"/>
+  <circle cx="64" cy="62" r="35" fill="#9a5b3c"/>
+  <path d="M45 56h8M75 56h8" stroke="#183248" stroke-width="7" stroke-linecap="round"/>
+  <path d="M51 78c8 8 18 8 26 0" fill="none" stroke="#183248" stroke-width="5" stroke-linecap="round"/>
+  <path d="M98 46c17-7 19 13 7 19" fill="none" stroke="#9a5b3c" stroke-width="11" stroke-linecap="round"/>
+  <path d="M105 38c8-10 17-4 12 5M111 42c10-7 16 2 9 8" fill="none" stroke="#9a5b3c" stroke-width="6" stroke-linecap="round"/>
+</svg>

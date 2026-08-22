@@ -35,10 +35,10 @@ service-independent.
 
 - The source is Snapchat Web in the Codex in-app browser; the archive owner
   opens the intended chat and starts each capture action in the foreground.
-- A capture run may perform exactly one bounded `older` or `newer` scroll step
-  when the user explicitly requests it. There is no unattended loop: the
-  visible status reports the requested direction, movement, range, and boundary
-  result after every run.
+- A capture run may perform one bounded `older` or `newer` scroll step, or a
+  user-triggered bounded walk made from those steps, when explicitly requested.
+  There is no background loop: the visible result reports the direction, step
+  cap, ranges, movement, and boundary/no-progress stop reason.
 - The web app may virtualize history, so captures are range-based and may be
   partial. The user can capture overlapping ranges and merge them later.
 - Real chat archives and raw captures are private data and stay under ignored
@@ -48,9 +48,10 @@ service-independent.
 
 ## Capabilities and Constraints
 
-- Normalize participants, message IDs, UTC timestamps, visible text, media
-  placeholders, saved-state/retention indicators, source references, and
-  per-record provenance into schema version 1 JSON.
+- Normalize participants, message IDs, UTC timestamps, visible text, images,
+  stickers/Bitmojis, alt text, dimensions, user-visible profile metadata,
+  media placeholders, saved-state/retention indicators, source references,
+  and per-record provenance into schema version 1 JSON.
 - Validate unsafe paths, missing timezone information, duplicate IDs, invalid
   references, and malformed capture metadata with actionable messages.
 - Import an explicitly supplied transcript or visible-capture JSON; merge
@@ -64,8 +65,11 @@ service-independent.
   search arbitrary accounts, crawl, or evade notifications.
 - The adapter reads only the currently open chat's rendered DOM. A scroll step
   moves the chat's visible message scroller by one viewport-sized increment and
-  captures that resulting rendered range; it never claims to load or verify
+  captures that resulting rendered range. A walk merges only the ranges it
+  rendered during that foreground invocation; it never claims to load or verify
   unseen history by itself.
+- Visible media is represented by safe local supplied assets or reference-only
+  placeholders; the adapter never downloads remote media bytes.
 - A complete archive claim is out of scope unless the overlap chain and
   boundaries justify `verified`; a verified rendered-range chain still cannot
   prove unseen or deleted messages.
