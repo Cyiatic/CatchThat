@@ -34,8 +34,10 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
   metadata otherwise. Readable avatar pixels captured from the visible DOM are
   materialized as local assets during import; reference-only states remain
   explicit in provenance.
-- Message rows are compact dark bubble clusters with cyan/coral speaker rails,
-  a colored author label, timestamp, stable deep link, content kind,
+- Message rows are compact dark bubble clusters with a Snapchat-style header
+  above each bubble: colored author label at left and a short local/UTC time at
+  right. Full timestamps remain in the evidence drawer. Cyan/coral speaker
+  rails, stable deep links, content kind,
   image/sticker/Bitmoji preview or reference card, and optional evidence
   badges. The bottom composer is a visual read-only status bar, never an input.
 - Provenance is a first-class drawer: source URL/reference, capture range, raw

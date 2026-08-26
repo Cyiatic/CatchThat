@@ -35,6 +35,31 @@ async function capture(options = {}) {
     element?.getAttribute?.("data-testid"),
     classes(element),
   ].filter(Boolean).join(" "));
+  const avatarVisualSelector = "img[src], img[srcset], img[data-src], img[data-original], [data-avatar] img, canvas[data-avatar], canvas[data-bitmoji], canvas[aria-label*='avatar' i], canvas[aria-label*='bitmoji' i], canvas[class*='avatar' i], canvas[class*='bitmoji' i], canvas";
+  const ancestorText = (element) => {
+    let current = element?.parentElement || null;
+    for (let depth = 0; current && depth < 7; depth += 1, current = current.parentElement) {
+      const value = clean(current.innerText || current.textContent);
+      if (value && value.length <= 160) return value;
+    }
+    return "";
+  };
+  const isAvatarLike = (element, nameHints = [], allowUnnamedSmallSquare = false) => {
+    if (!element || !isVisible(element)) return false;
+    const descriptor = `${mediaDescriptor(element)} ${mediaDescriptor(element.parentElement)}`.toLowerCase();
+    if (/favicon|site[- ]?icon|link[- ]?icon|attachment|link[- ]?preview|message[- ]?media/.test(descriptor)) return false;
+    const rect = element.getBoundingClientRect();
+    const maxDimension = Math.max(rect.width, rect.height);
+    const square = Math.abs(rect.width - rect.height) <= 4;
+    const semantic = /avatar|bitmoji|profile(?:[- ]?photo)?|user(?:[- ]?photo)?/.test(descriptor);
+    const context = ancestorText(element).toLocaleLowerCase();
+    const named = nameHints.some((hint) => {
+      const value = clean(hint).toLocaleLowerCase();
+      return value.length >= 2 && context.includes(value);
+    });
+    const smallSquare = square && rect.width >= 24 && maxDimension <= 128;
+    return semantic || (smallSquare && (named || allowUnnamedSmallSquare));
+  };
   const mediaReference = (element) => {
     if (!element) return null;
     const tag = element.tagName?.toLowerCase();
@@ -50,10 +75,11 @@ async function capture(options = {}) {
     return candidates.find((candidate) => isHttp(candidate)) || candidates[0] || null;
   };
   const captureVisibleAvatar = (element) => {
-    if (!element || element.tagName?.toLowerCase() !== "img" || !isVisible(element)) return null;
-    const naturalWidth = Number(element.naturalWidth || dimension(element, "width"));
-    const naturalHeight = Number(element.naturalHeight || dimension(element, "height"));
-    if (!element.complete || !naturalWidth || !naturalHeight) return null;
+    const tag = element?.tagName?.toLowerCase();
+    if (!element || !["img", "canvas"].includes(tag) || !isVisible(element)) return null;
+    const naturalWidth = Number(element.naturalWidth || element.width || dimension(element, "width"));
+    const naturalHeight = Number(element.naturalHeight || element.height || dimension(element, "height"));
+    if ((tag === "img" && !element.complete) || !naturalWidth || !naturalHeight) return null;
     const scale = Math.min(1, 512 / Math.max(naturalWidth, naturalHeight));
     if (typeof document?.createElement !== "function") return null;
     const canvas = document.createElement("canvas");
@@ -167,10 +193,11 @@ async function capture(options = {}) {
       }
       if (renderedWindowSignature(currentRange) === renderedWindowSignature(nextRange)) unchangedWindowSteps += 1;
       else unchangedWindowSteps = 0;
-      if (unchangedWindowSteps >= 2) {
-        stopReason = "rendered_window_unchanged";
-        break;
-      }
+      // Identical row IDs do not prove that pagination failed: Snapchat may
+      // keep a non-virtualized row set in the DOM while the conversation pane
+      // continues moving toward the boundary. Continue while scrollTop moves;
+      // the boundary, no-progress check, and bounded step cap remain the stop
+      // conditions. Keep unchanged_window_steps as provenance evidence.
     }
 
     const messageById = new Map();
@@ -321,11 +348,80 @@ async function capture(options = {}) {
     "main li",
   ];
   const rowFor = (candidate) => candidate.closest("[data-message-id], [role='article'], [role='listitem'], li") || candidate;
+  const siblingRows = (row) => {
+    const parent = row?.parentElement;
+    if (!parent || !["UL", "OL"].includes(String(parent.tagName || "").toUpperCase())) return [];
+    return Array.from(parent.children).filter((child) => child.tagName?.toLowerCase() === "li");
+  };
+  const messageGroupFor = (row) => {
+    let current = row?.parentElement || null;
+    while (current && current !== main) {
+      if (String(current.tagName || "").toUpperCase() === "LI" && current.querySelectorAll("li").length > 1) return current;
+      current = current.parentElement;
+    }
+    return null;
+  };
+  const nodePath = (element) => {
+    const parts = [];
+    let current = element;
+    let depth = 0;
+    while (current && current !== main && current !== document.body && depth < 24) {
+      const parent = current.parentElement;
+      if (!parent) break;
+      const children = Array.from(parent.children || []);
+      let index = children.indexOf(current);
+      if (index < 0) {
+        const currentId = current.getAttribute?.("data-message-id") || current.getAttribute?.("data-item-id") || current.id || null;
+        if (currentId) {
+          index = children.findIndex((child) => (child.getAttribute?.("data-message-id") || child.getAttribute?.("data-item-id") || child.id || null) === currentId);
+        }
+      }
+      parts.push(`${String(parent.tagName || "").toLowerCase()}:${index}`);
+      current = parent;
+      depth += 1;
+    }
+    return parts.reverse().join("/");
+  };
+  const rowKey = (row) => {
+    const sourceId = row?.getAttribute?.("data-message-id") || row?.getAttribute?.("data-item-id") || row?.id?.match(/(?:message|chat)[-_]([A-Za-z0-9_-]+)/i)?.[1] || null;
+    if (sourceId) return `source:${sourceId}`;
+    const path = nodePath(row);
+    return path && !path.includes(":-1") ? `path:${path}` : null;
+  };
+  const uniqueRows = (candidateRows) => {
+    const seen = new Set();
+    return candidateRows.filter((row) => {
+      const key = rowKey(row);
+      if (!key || seen.has(key)) return Boolean(!key);
+      seen.add(key);
+      return true;
+    });
+  };
+  const timestampInfoFor = (row) => {
+    const ownTimestamp = row?.querySelector(timestampSelector);
+    if (ownTimestamp) return { element: ownTimestamp, inferred: false };
+    const siblings = siblingRows(row);
+    const index = siblings.indexOf(row);
+    if (index < 0) return { element: null, inferred: false };
+    const nearby = [
+      ...siblings.slice(0, index).reverse(),
+      ...siblings.slice(index + 1),
+    ];
+    const groupTimestamp = nearby.map((sibling) => sibling.querySelector(timestampSelector)).find(Boolean) || null;
+    return { element: groupTimestamp, inferred: Boolean(groupTimestamp) };
+  };
+  const hasNestedMessageRows = (row) => Array.from(row?.querySelectorAll?.("li") || []).some((child) => {
+    if (!isVisible(child)) return false;
+    const text = clean(child.innerText || child.textContent);
+    const media = child.querySelector("img[src], video[src], audio[src], source[src]");
+    return Boolean((text || media) && timestampInfoFor(child).element);
+  });
   const validRow = (row) => {
     if (!isVisible(row) || row.closest("nav, aside")) return false;
+    if (hasNestedMessageRows(row)) return false;
     const text = clean(row.innerText || row.textContent);
     const media = row.querySelector("img[src], video[src], audio[src], source[src]");
-    const timestamp = row.querySelector(timestampSelector);
+    const timestamp = timestampInfoFor(row).element;
     return Boolean((text || media) && timestamp);
   };
   const collectRows = () => {
@@ -333,13 +429,16 @@ async function capture(options = {}) {
     let candidateNodes = [];
     const timestampAnchoredRows = Array.from(new Set(
       Array.from(main.querySelectorAll(timestampSelector))
-        .filter((element) => isVisible(element))
         .map((element) => rowFor(element))
+        .filter((row) => isVisible(row) && !row.closest("nav, aside"))
         .filter(Boolean),
     )).filter(validRow);
     if (timestampAnchoredRows.length) {
-      selector = "visible timestamp-anchored rows";
-      candidateNodes = timestampAnchoredRows;
+      selector = "visible message rows anchored to timestamp metadata plus grouped siblings";
+      candidateNodes = [...timestampAnchoredRows];
+      timestampAnchoredRows.forEach((row) => {
+        siblingRows(row).forEach((sibling) => candidateNodes.push(sibling));
+      });
     } else {
       for (const candidateSelector of selectorCandidates) {
         const found = Array.from(main.querySelectorAll(candidateSelector)).filter((element) => isVisible(element));
@@ -350,9 +449,24 @@ async function capture(options = {}) {
         }
       }
     }
+    const domOrder = new Map();
+    Array.from(main.querySelectorAll("li")).forEach((row, index) => {
+      const key = rowKey(row);
+      if (key && !domOrder.has(key)) domOrder.set(key, index);
+    });
+    const documentOrder = (left, right) => {
+      if (typeof left.compareDocumentPosition === "function") {
+        const position = left.compareDocumentPosition(right);
+        if (position & 2) return 1;
+        if (position & 4) return -1;
+      }
+      const leftIndex = domOrder.get(rowKey(left));
+      const rightIndex = domOrder.get(rowKey(right));
+      return Number.isInteger(leftIndex) && Number.isInteger(rightIndex) ? leftIndex - rightIndex : 0;
+    };
     return {
       usedSelector: selector,
-      rows: Array.from(new Set(candidateNodes.map(rowFor))).filter(validRow),
+      rows: uniqueRows(candidateNodes.map(rowFor)).filter(validRow).sort(documentOrder),
     };
   };
   let { usedSelector, rows } = collectRows();
@@ -456,6 +570,9 @@ async function capture(options = {}) {
   const participants = new Map();
   const messages = [];
   const generatedMessageOccurrences = new Map();
+  // The in-app read-only evaluator does not expose WeakMap. Keep this cache
+  // bounded to the groups already returned by the visible DOM query instead.
+  const groupAuthorCache = [];
   let skippedWithoutTimestamp = 0;
   const selectorNotes = [
     `Selected visible row candidate: ${usedSelector}.`,
@@ -465,41 +582,83 @@ async function capture(options = {}) {
       ? `Applied one bounded ${requestedScroll} scroll step because the caller explicitly requested it; no follow-up scroll was scheduled.`
       : "No scroll action was requested; rows were read from the current visible DOM without navigation or expansion.",
     "Rows without an ISO-8601 timestamp with timezone were skipped rather than assigned a date.",
+    "Messages grouped beside a visible timestamp are included as sibling rows; inherited timestamps are marked approximate in message provenance.",
      "Visible message images, stickers, Bitmojis, alt text, dimensions, user labels, and profile indicators are preserved as references or placeholders; message media bytes are not captured or downloaded.",
      "A displayed participant avatar may be copied from readable pixels already rendered in the DOM into a bounded local data URL; cross-origin or blob-only avatars remain reference-only and are never fetched.",
+    "Snapchat avatar images may expose only a layout class and dimensions; small square candidates are associated only with the visible author context or a visible named header/list item.",
     "Decorative favicon and site-icon nodes inside visible link previews are excluded from message media cards.",
     "Selector certainty is provisional until one signed-in, user-opened chat is inspected.",
   ];
 
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
-    const timestampElement = row.querySelector(timestampSelector);
+    const timestampInfo = timestampInfoFor(row);
+    const timestampElement = timestampInfo.element;
     const timestamp = timestampElement?.getAttribute("datetime") || timestampElement?.getAttribute("data-timestamp") || timestampElement?.getAttribute("data-time");
     if (!isoWithTimezone(timestamp)) {
       skippedWithoutTimestamp += 1;
       continue;
     }
 
-    const authorElement = row.querySelector("[data-author-id], [data-sender-id], [data-user-id], [data-testid*='author' i], [data-testid*='sender' i], [class*='author' i], [class*='sender' i], [class*='username' i]");
-    const headerElement = row.querySelector("header");
+    const authorSelector = "[data-author-id], [data-sender-id], [data-user-id], [data-testid*='author' i], [data-testid*='sender' i], [class*='author' i], [class*='sender' i], [class*='username' i]";
+    const authorElement = row.querySelector(authorSelector);
+    const rowSiblings = siblingRows(row);
+    const authorContext = authorElement
+      ? row
+      : rowSiblings.slice(0, rowSiblings.indexOf(row)).reverse().find((sibling) => sibling.querySelector(authorSelector)) || row;
+    const effectiveAuthorElement = authorElement || authorContext.querySelector(authorSelector);
+    const headerElement = authorContext.querySelector("header");
     const timestampLabel = clean(timestampElement?.innerText || timestamp);
-    const headerAuthor = clean(headerElement?.innerText).replace(timestampLabel, "").trim();
-    const authorSourceId = authorElement?.getAttribute("data-user-id") || authorElement?.getAttribute("data-author-id") || authorElement?.getAttribute("data-sender-id") || null;
-    const visualElements = Array.from(row.querySelectorAll("img[src], img[srcset], img[data-src], img[data-original], [data-avatar] img"));
-    const avatarElement = visualElements.find((element) => {
+    const messageGroup = messageGroupFor(row);
+    const groupLines = messageGroup
+      ? String(messageGroup.innerText || messageGroup.textContent || "").split(/\r?\n/).map(clean).filter(Boolean)
+      : [];
+    const groupTimestampIndex = groupLines.findIndex((line) => line === timestampLabel || (timestampLabel && line.includes(timestampLabel)));
+    const groupAuthorLabel = groupTimestampIndex > 0 ? groupLines[groupTimestampIndex - 1] : "";
+    const headerAuthor = clean(headerElement?.innerText).replace(timestampLabel, "").trim() || groupAuthorLabel;
+    const authorGroup = row.parentElement;
+    const cachedAuthor = authorGroup
+      ? groupAuthorCache.find((entry) => entry.group === authorGroup)?.author || null
+      : null;
+    let authorSourceId = effectiveAuthorElement?.getAttribute("data-user-id") || effectiveAuthorElement?.getAttribute("data-author-id") || effectiveAuthorElement?.getAttribute("data-sender-id") || null;
+    const authorHints = [
+      effectiveAuthorElement?.innerText,
+      effectiveAuthorElement?.getAttribute("aria-label"),
+      headerAuthor,
+      cachedAuthor?.name,
+      cachedAuthor?.handle,
+    ].filter(Boolean);
+    const localVisualElements = Array.from((authorElement ? row : authorContext).querySelectorAll(avatarVisualSelector));
+    const namedGlobalVisualElements = Array.from(document.querySelectorAll(avatarVisualSelector))
+      .filter((element) => isAvatarLike(element, authorHints, false));
+    const visualElements = [...new Set([...localVisualElements, ...namedGlobalVisualElements])];
+    const semanticAvatar = (element) => {
       const avatarContext = element.closest("[data-avatar], [data-testid*=avatar i], [aria-label*=avatar i]");
       const descriptor = `${mediaDescriptor(element)} ${mediaDescriptor(avatarContext)}`.toLowerCase();
       return element.hasAttribute("data-avatar")
         || Boolean(avatarContext)
         || /avatar|profile(?:[- ]?photo)?|user(?:[- ]?photo)?/.test(descriptor)
         || (authorSourceId && (element.getAttribute("data-user-id") === authorSourceId || element.closest("[data-user-id]")?.getAttribute("data-user-id") === authorSourceId));
-    }) || null;
-    const authorName = clean(authorElement?.innerText || authorElement?.getAttribute("aria-label") || headerAuthor || avatarElement?.alt) || "Unknown participant";
-    const authorId = authorSourceId || avatarElement?.getAttribute("data-user-id") || `author-${slug(authorName) || participants.size + 1}`;
-    const handleElement = row.querySelector("[data-username], [data-user-name], [data-handle], [data-testid*='username' i], [data-testid*='handle' i], [class*='username' i], [class*='handle' i]");
-    const statusElement = row.querySelector("[data-status], [data-user-status], [data-testid*='status' i], [class*='profileStatus' i]");
-    const profileLabelElement = row.querySelector("[data-profile-label], [data-user-label], [data-testid*='profile-label' i]");
-    const handle = clean(handleElement?.getAttribute("data-username") || handleElement?.getAttribute("data-handle") || handleElement?.innerText || handleElement?.getAttribute("aria-label"));
+    };
+    const avatarElement = visualElements.find(semanticAvatar)
+      || localVisualElements.find((element) => isAvatarLike(element, authorHints, true))
+      || namedGlobalVisualElements.find((element) => isAvatarLike(element, authorHints, false))
+      || null;
+    let authorName = clean(effectiveAuthorElement?.innerText || effectiveAuthorElement?.getAttribute("aria-label") || headerAuthor || avatarElement?.alt) || "Unknown participant";
+    let authorId = authorSourceId || avatarElement?.getAttribute("data-user-id") || `author-${slug(authorName) || participants.size + 1}`;
+    const handleElement = authorContext.querySelector("[data-username], [data-user-name], [data-handle], [data-testid*='username' i], [data-testid*='handle' i], [class*='username' i], [class*='handle' i]");
+    const statusElement = authorContext.querySelector("[data-status], [data-user-status], [data-testid*='status' i], [class*='profileStatus' i]");
+    const profileLabelElement = authorContext.querySelector("[data-profile-label], [data-user-label], [data-testid*='profile-label' i]");
+    let handle = clean(handleElement?.getAttribute("data-username") || handleElement?.getAttribute("data-handle") || handleElement?.innerText || handleElement?.getAttribute("aria-label"));
+    const authorEvidencePresent = Boolean(authorElement || headerAuthor || avatarElement || authorSourceId);
+    const authorInheritedFromGroup = Boolean(!authorElement && groupAuthorLabel);
+    const authorInferred = !authorEvidencePresent && Boolean(cachedAuthor);
+    if (authorInferred) {
+      authorSourceId = cachedAuthor.source_id || null;
+      authorName = cachedAuthor.name;
+      authorId = cachedAuthor.id;
+      handle = cachedAuthor.handle || handle;
+    }
     const participant = participants.get(authorId) || { id: authorId, display_name: authorName, username: handle || authorName };
     participant.display_name = participant.display_name === "Unknown participant" ? authorName : participant.display_name || authorName;
     participant.username = handle || participant.username || authorName;
@@ -519,11 +678,22 @@ async function capture(options = {}) {
     const status = clean(statusElement?.innerText || statusElement?.getAttribute("aria-label") || statusElement?.getAttribute("data-status"));
     if (status) visibleProfile.status = status;
     if (authorSourceId) visibleProfile.source_id = authorSourceId;
-    const profileLink = Array.from(row.querySelectorAll("a[href]"))
+    const profileLink = Array.from(authorContext.querySelectorAll("a[href]"))
       .find((link) => /profile|user|avatar|author|sender|username/i.test(mediaDescriptor(link)) && isHttp(link.href || link.getAttribute("href")));
     if (profileLink) visibleProfile.source_url = profileLink.href || profileLink.getAttribute("href");
     if (Object.keys(visibleProfile).length) participant.visible_profile = visibleProfile;
     participants.set(authorId, participant);
+    if (authorGroup && authorEvidencePresent) {
+      const existingGroupAuthor = groupAuthorCache.find((entry) => entry.group === authorGroup);
+      const groupAuthor = {
+        id: authorId,
+        name: authorName,
+        handle: handle || null,
+        source_id: authorSourceId || null,
+      };
+      if (existingGroupAuthor) existingGroupAuthor.author = groupAuthor;
+      else groupAuthorCache.push({ group: authorGroup, author: groupAuthor });
+    }
 
     const contentElement = row.querySelector("[data-message-content], [data-testid*='content' i], [class*='messageText' i], [class*='content' i], [dir='auto'], p");
     let content = clean(contentElement?.innerText || contentElement?.textContent);
@@ -619,7 +789,7 @@ async function capture(options = {}) {
       content_kind: content && media.length ? "mixed" : media.length ? "media_placeholder" : content ? "visible_text" : "empty",
       media,
       source_refs: sourceRefs,
-      grouped: !authorElement,
+      grouped: !authorElement || timestampInfo.inferred,
       provenance: {
         source_id: sourceId,
         source_url: sourceUrl,
@@ -629,6 +799,14 @@ async function capture(options = {}) {
         visible_dom: true,
       },
     };
+    const provenanceNotes = [];
+    if (timestampInfo.inferred) provenanceNotes.push("Timestamp inherited from a visible timestamp in the same message group; Snapchat did not render an exact per-row timestamp.");
+    if (authorInferred || authorInheritedFromGroup || (!authorElement && authorContext !== row)) provenanceNotes.push("Author metadata inherited from a visible row or group wrapper in the same message group.");
+    if (provenanceNotes.length) message.provenance.notes = provenanceNotes;
+    if (timestampInfo.inferred) {
+      message.provenance.timestamp_inferred = true;
+      message.provenance.timestamp_source = "visible_group_timestamp";
+    }
     if (!sourceId && generatedOccurrence > 1) message.provenance.generated_id_collision_index = generatedOccurrence;
     if (savedState) message.saved_state = savedState;
     if (retention) message.retention = retention;

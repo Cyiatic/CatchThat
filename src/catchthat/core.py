@@ -17,9 +17,15 @@ from zoneinfo import ZoneInfo
 
 
 SCHEMA_VERSION = 1
+EVIDENCE_VERSION = 1
+EVIDENCE_TYPE = "catchthat_metadata_evidence"
+CATALOG_VERSION = 1
+CAPTURE_SESSION_VERSION = 1
+CAPTURE_SESSION_TYPE = "catchthat_capture_session"
 _MISSING = object()
 _TIMESTAMP_OFFSET = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$", re.IGNORECASE)
 _CONTENT_KINDS = frozenset({"visible_text", "media_placeholder", "mixed", "empty"})
+_TIMESTAMP_PRECISIONS = frozenset({"exact", "minute", "second", "date", "unknown"})
 _MEDIA_KINDS = frozenset({"image", "video", "audio", "file", "sticker", "snap", "unknown"})
 _MEDIA_KIND_ALIASES = {
     "bitmoji": "sticker",
@@ -103,6 +109,21 @@ def _normalise_local_reference(value: Any) -> str | None:
     if not parts or ".." in parts:
         return None
     return "/".join(parts)
+
+
+def _safe_output_reference(path: Path, root: Path) -> str:
+    """Return a stable relative reference for a file beside an output root."""
+
+    resolved_root = root.resolve()
+    resolved_path = path.resolve()
+    try:
+        relative = resolved_path.relative_to(resolved_root)
+    except ValueError as error:
+        raise ValueError("Output references must stay inside the output directory") from error
+    reference = _normalise_local_reference(relative.as_posix())
+    if reference is None:
+        raise ValueError("Output reference is not a safe relative path")
+    return reference
 
 
 def _clean(value: Any) -> str:
@@ -227,7 +248,7 @@ def _validate_provenance(value: Any, field: str, errors: list[str]) -> None:
     if value.get("source_file") is not None:
         if not isinstance(value["source_file"], str) or _normalise_local_reference(value["source_file"]) is None:
             errors.append(f"{field}.source_file must be a safe relative source path")
-    for key in ("source_id", "source_url", "capture_id", "selector"):
+    for key in ("source_id", "source_url", "capture_id", "selector", "timestamp_source"):
         if value.get(key) is not None and not isinstance(value[key], str):
             errors.append(f"{field}.{key} must be a string or null")
     if value.get("source_url") is not None and not _is_http_url(value["source_url"]):
@@ -248,6 +269,8 @@ def _validate_provenance(value: Any, field: str, errors: list[str]) -> None:
             errors.append(f"{field}.capture_walk_index must be a non-negative integer")
     if "visible_dom" in value and not isinstance(value["visible_dom"], bool):
         errors.append(f"{field}.visible_dom must be boolean")
+    if "timestamp_inferred" in value and not isinstance(value["timestamp_inferred"], bool):
+        errors.append(f"{field}.timestamp_inferred must be boolean")
     if "notes" in value and (
         not isinstance(value["notes"], list) or any(not isinstance(note, str) for note in value["notes"])
     ):
@@ -476,6 +499,8 @@ def validate_archive(archive: Any) -> list[str]:
         elif participant_ids and author_id not in participant_ids:
             errors.append(f"messages[{index}].author_id {author_id!r} is not in participants")
         _validate_timestamp(message.get("timestamp"), f"messages[{index}].timestamp", errors)
+        if "timestamp_precision" in message and message["timestamp_precision"] not in _TIMESTAMP_PRECISIONS:
+            errors.append(f"messages[{index}].timestamp_precision must be one of {sorted(_TIMESTAMP_PRECISIONS)}")
         if not isinstance(message.get("content", ""), str):
             errors.append(f"messages[{index}].content must be a string")
         if message.get("content_kind", "visible_text") not in _CONTENT_KINDS:
@@ -906,6 +931,9 @@ def _normalise_transcript_message(
             "record_index": index,
         },
     }
+    timestamp_precision = _first(record, "timestamp_precision", "time_precision", default=None)
+    if timestamp_precision in _TIMESTAMP_PRECISIONS:
+        message["timestamp_precision"] = timestamp_precision
     if id_generated:
         message["provenance"]["id_generated"] = True
     source_id = _first(record, "source_id", "source_message_id", default=None)
@@ -936,7 +964,7 @@ def _normalise_transcript_message(
         message["edited_at"] = _normalise_required_timestamp(edited_at, index)
     if isinstance(record.get("grouped"), bool):
         message["grouped"] = record["grouped"]
-    for field in ("capture_id", "selector"):
+    for field in ("capture_id", "selector", "timestamp_source"):
         value = input_provenance.get(field)
         if value is not None and str(value).strip():
             message["provenance"][field] = str(value).strip()
@@ -947,6 +975,8 @@ def _normalise_transcript_message(
             message["provenance"][field] = value
     if input_provenance.get("visible_dom") is True:
         message["provenance"]["visible_dom"] = True
+    if input_provenance.get("timestamp_inferred") is True:
+        message["provenance"]["timestamp_inferred"] = True
     notes = input_provenance.get("notes")
     if isinstance(notes, list):
         message["provenance"]["notes"] = [str(note) for note in notes if isinstance(note, str)]
@@ -1185,7 +1215,7 @@ def _merge_capture_participant(existing: dict[str, Any], incoming: dict[str, Any
 def _merge_capture_message(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
     """Merge complementary visible fields without hiding overlap conflicts."""
 
-    for key in ("content", "content_kind", "saved_state", "retention", "reply_to", "message_link"):
+    for key in ("content", "content_kind", "timestamp_precision", "saved_state", "retention", "reply_to", "message_link"):
         if incoming.get(key) not in (None, "") and existing.get(key) in (None, ""):
             existing[key] = incoming[key]
     for key in ("media", "source_refs"):
@@ -1534,7 +1564,7 @@ def _sha256(path: Path) -> str:
 
 
 def _build_manifest(archive: dict[str, Any], output_dir: Path) -> dict[str, Any]:
-    references = {"archive.json", "app.js", "index.html"} | _asset_references(archive)
+    references = {"archive.json", "app.css", "app.js", "index.html"} | _asset_references(archive)
     files: list[dict[str, Any]] = []
     for reference in sorted(references):
         path = output_dir / reference
@@ -1604,7 +1634,7 @@ def verify_build(output_dir: Path) -> list[str]:
                 errors.append(f"manifest.files[{index}].sha256 must be a SHA-256 hex digest")
             elif _sha256(path) != expected_hash:
                 errors.append(f"hash mismatch: {reference}")
-        for required in ("archive.json", "app.js", "index.html"):
+        for required in ("archive.json", "app.css", "app.js", "index.html"):
             if required not in seen:
                 errors.append(f"manifest is missing required file: {required}")
     archive_path = output_dir / "archive.json"
@@ -1618,10 +1648,10 @@ def verify_build(output_dir: Path) -> list[str]:
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
             errors.append(f"archive.json could not be read: {error}")
     if archive is not None:
-        expected_files = {"archive.json", "app.js", "index.html"} | _asset_references(archive)
+        expected_files = {"archive.json", "app.css", "app.js", "index.html"} | _asset_references(archive)
         errors.extend(f"manifest is missing expected file: {reference}" for reference in sorted(expected_files - manifest_paths))
         errors.extend(f"missing referenced local asset: {reference}" for reference in sorted(_asset_references(archive)) if not (output_dir / reference).is_file())
-    for required in ("index.html", "app.js"):
+    for required in ("index.html", "app.css", "app.js"):
         if not (output_dir / required).is_file():
             errors.append(f"{required} is missing")
     return errors
@@ -1649,6 +1679,22 @@ def build_archive(input_path: Path, output_dir: Path, template_path: Path | None
     if not template.is_file():
         raise FileNotFoundError(f"Viewer template not found: {template}")
     template_text = template.read_text(encoding="utf-8")
+    style_open = "  <style>\n"
+    style_start = template_text.find(style_open)
+    style_end = template_text.find("\n  </style>", style_start)
+    if style_start == -1 or style_end == -1:
+        raise ValueError("Viewer template is missing its stylesheet block")
+    app_css = template_text[style_start + len(style_open) : style_end]
+    template_text = template_text[:style_start] + '  <link rel="stylesheet" href="app.css">' + template_text[style_end + len("\n  </style>") :]
+    csp = (
+        "default-src 'none'; base-uri 'none'; script-src 'self'; style-src 'self'; "
+        "img-src 'self' data:; media-src 'self'; connect-src 'none'; frame-src 'none'; "
+        "object-src 'none'; form-action 'none';"
+    )
+    marker = '  <meta name="referrer" content="no-referrer">'
+    if marker not in template_text:
+        raise ValueError("Viewer template is missing its referrer policy")
+    template_text = template_text.replace(marker, marker + f'\n  <meta http-equiv="Content-Security-Policy" content="{csp}">', 1)
     script_open = "  <script data-catchthat-app>\n"
     script_start = template_text.rfind(script_open)
     script_end = template_text.rfind("\n  </script>", script_start)
@@ -1663,6 +1709,7 @@ def build_archive(input_path: Path, output_dir: Path, template_path: Path | None
         encoding="utf-8",
         newline="\n",
     )
+    (output_dir / "app.css").write_text(app_css, encoding="utf-8", newline="\n")
     title = html.escape(str(archive["metadata"]["title"]), quote=True)
     template_text = template_text.replace("{{ARCHIVE_TITLE}}", title)
     (output_dir / "index.html").write_text(template_text, encoding="utf-8", newline="\n")
@@ -1688,7 +1735,11 @@ def render_text(archive: dict[str, Any], timezone_name: str | None = None) -> st
     lines: list[str] = []
     for message in archive.get("messages", []) if isinstance(archive.get("messages"), list) else []:
         timestamp = parse_timestamp(message.get("timestamp"))
-        local_time = timestamp.astimezone(zone).strftime("%Y-%m-%d %H:%M") if timestamp else str(message.get("timestamp") or "")
+        if timestamp:
+            format_string = "%Y-%m-%d" if message.get("timestamp_precision") == "date" else "%Y-%m-%d %H:%M"
+            local_time = timestamp.astimezone(zone).strftime(format_string)
+        else:
+            local_time = str(message.get("timestamp") or "")
         text = str(message.get("content") or "").strip()
         media = message.get("media") if isinstance(message.get("media"), list) else []
         if media:
@@ -1704,3 +1755,650 @@ def render_text(archive: dict[str, Any], timezone_name: str | None = None) -> st
         suffix = f" ({', '.join(indicator_parts)})" if indicator_parts else ""
         lines.append(f"{names.get(message.get('author_id'), message.get('author_id', 'Unknown'))}: {text} [{local_time}]{suffix}")
     return "\n".join(lines)
+
+
+def _evidence_source_summary(metadata: dict[str, Any]) -> dict[str, Any]:
+    source = metadata.get("source") if isinstance(metadata.get("source"), dict) else {}
+    result: dict[str, Any] = {}
+    for key in ("type", "label", "source_name", "capture_method", "url"):
+        value = source.get(key)
+        if key == "url":
+            if _is_http_url(value):
+                result[key] = str(value).strip()
+        elif isinstance(value, str) and value.strip():
+            result[key] = value.strip()
+    if isinstance(source.get("read_only"), bool):
+        result["read_only"] = source["read_only"]
+    if isinstance(metadata.get("thread_id"), str) and metadata["thread_id"].strip():
+        result["thread_id"] = metadata["thread_id"].strip()
+    if isinstance(metadata.get("thread_identity"), dict):
+        identity = {
+            key: value.strip()
+            for key, value in metadata["thread_identity"].items()
+            if key in {"kind", "label", "source_id"} and isinstance(value, str) and value.strip()
+        }
+        if identity:
+            result["thread_identity"] = identity
+    if isinstance(source.get("notes"), list):
+        result["notes_count"] = sum(1 for note in source["notes"] if isinstance(note, str))
+    if isinstance(metadata.get("selector_notes"), list):
+        result["selector_notes_count"] = sum(1 for note in metadata["selector_notes"] if isinstance(note, str))
+    return result
+
+
+def _evidence_feature_counts(archive: dict[str, Any]) -> dict[str, int]:
+    participants = archive.get("participants") if isinstance(archive.get("participants"), list) else []
+    messages = archive.get("messages") if isinstance(archive.get("messages"), list) else []
+    return {
+        "messages_with_media": sum(1 for message in messages if isinstance(message, dict) and message.get("media")),
+        "media_items": sum(
+            len(message.get("media", []))
+            for message in messages
+            if isinstance(message, dict) and isinstance(message.get("media"), list)
+        ),
+        "messages_with_saved_state": sum(1 for message in messages if isinstance(message, dict) and message.get("saved_state")),
+        "messages_with_retention": sum(1 for message in messages if isinstance(message, dict) and message.get("retention")),
+        "messages_with_source_refs": sum(1 for message in messages if isinstance(message, dict) and message.get("source_refs")),
+        "participants_with_visible_profile": sum(
+            1 for participant in participants if isinstance(participant, dict) and participant.get("visible_profile")
+        ),
+        "participants_with_local_avatar": sum(
+            1 for participant in participants if isinstance(participant, dict) and participant.get("avatar_path")
+        ),
+    }
+
+
+def _evidence_archive_summary(input_path: Path, archive: dict[str, Any]) -> dict[str, Any]:
+    metadata = archive.get("metadata") if isinstance(archive.get("metadata"), dict) else {}
+    messages = archive.get("messages") if isinstance(archive.get("messages"), list) else []
+    participants = archive.get("participants") if isinstance(archive.get("participants"), list) else []
+    timestamps = sorted(
+        parsed
+        for message in messages
+        if isinstance(message, dict)
+        for parsed in [parse_timestamp(message.get("timestamp"))]
+        if parsed is not None
+    )
+    return {
+        "path": input_path.name,
+        "size_bytes": input_path.stat().st_size,
+        "sha256": _sha256(input_path),
+        "schema_version": archive.get("schema_version"),
+        "title": str(metadata.get("title") or input_path.stem),
+        "kind": str(metadata.get("kind") or "snapchat_chat"),
+        "thread_id": metadata.get("thread_id") if isinstance(metadata.get("thread_id"), str) else None,
+        "message_count": len(messages),
+        "participant_count": len(participants),
+        "oldest_timestamp": timestamps[0].isoformat().replace("+00:00", "Z") if timestamps else None,
+        "newest_timestamp": timestamps[-1].isoformat().replace("+00:00", "Z") if timestamps else None,
+        "feature_counts": _evidence_feature_counts(archive),
+        "local_asset_count": len(_asset_references(archive)),
+    }
+
+
+def _evidence_asset_records(archive: dict[str, Any], root: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    root = root.resolve()
+    for reference in sorted(_asset_references(archive)):
+        path = (root / reference).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError:
+            records.append({"path": reference, "exists": False})
+            continue
+        record: dict[str, Any] = {"path": reference, "exists": path.is_file()}
+        if path.is_file():
+            record["size_bytes"] = path.stat().st_size
+            record["sha256"] = _sha256(path)
+        records.append(record)
+    return records
+
+
+def export_evidence(input_path: Path, output_path: Path) -> dict[str, Any]:
+    """Write a message-free provenance and integrity report beside an archive."""
+
+    input_path = input_path.resolve()
+    output_path = output_path.resolve()
+    if not input_path.is_file():
+        raise FileNotFoundError(f"Archive file does not exist: {input_path}")
+    if input_path == output_path:
+        raise ValueError("Evidence report cannot overwrite the archive")
+    if input_path.parent != output_path.parent:
+        raise ValueError("Evidence report and archive must be in the same directory")
+    archive = load_json(input_path)
+    errors = validate_archive(archive)
+    if errors:
+        raise ValueError("Archive validation failed:\n- " + "\n- ".join(errors))
+    evidence = {
+        "evidence_version": EVIDENCE_VERSION,
+        "type": EVIDENCE_TYPE,
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "archive": _evidence_archive_summary(input_path, archive),
+        "source": _evidence_source_summary(archive.get("metadata", {})),
+        "coverage": verify_transcript_coverage(input_path),
+        "local_assets": _evidence_asset_records(archive, input_path.parent),
+    }
+    write_json(output_path, evidence)
+    return evidence
+
+
+def _evidence_file_record(path: Path, record: Any, field: str, errors: list[str]) -> None:
+    if not isinstance(record, dict):
+        errors.append(f"{field} must be an object")
+        return
+    if not path.is_file():
+        errors.append(f"{field}.path is missing: {record.get('path')}")
+        return
+    size = record.get("size_bytes")
+    if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+        errors.append(f"{field}.size_bytes must be a non-negative integer")
+    elif path.stat().st_size != size:
+        errors.append(f"{field} size mismatch")
+    digest = record.get("sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+        errors.append(f"{field}.sha256 must be a SHA-256 hex digest")
+    elif _sha256(path).lower() != digest.lower():
+        errors.append(f"{field} hash mismatch")
+
+
+def _evidence_has_content_keys(value: Any) -> bool:
+    forbidden = {"messages", "participants", "content", "message_bodies", "raw_records", "raw_capture"}
+    if isinstance(value, dict):
+        return any(key in forbidden or _evidence_has_content_keys(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(_evidence_has_content_keys(item) for item in value)
+    return False
+
+
+def verify_evidence(evidence_path: Path) -> list[str]:
+    """Verify a metadata-only evidence report and the archive it describes."""
+
+    evidence_path = evidence_path.resolve()
+    if not evidence_path.is_file():
+        return [f"evidence report does not exist: {evidence_path}"]
+    errors: list[str] = []
+    try:
+        evidence = load_json(evidence_path)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        return [f"evidence report could not be read: {error}"]
+    if evidence.get("evidence_version") != EVIDENCE_VERSION:
+        errors.append(f"evidence_version must be {EVIDENCE_VERSION}")
+    if evidence.get("type") != EVIDENCE_TYPE:
+        errors.append(f"evidence type must be {EVIDENCE_TYPE}")
+    if _evidence_has_content_keys(evidence):
+        errors.append("evidence report must not contain message bodies or archive collections")
+    archive_record = evidence.get("archive")
+    archive_path: Path | None = None
+    if not isinstance(archive_record, dict):
+        errors.append("archive must be an object")
+    else:
+        reference = archive_record.get("path")
+        if not isinstance(reference, str) or _normalise_local_reference(reference) != reference:
+            errors.append("archive.path must be a safe relative path")
+        elif Path(reference).name != reference:
+            errors.append("archive.path must point beside the evidence report")
+        else:
+            archive_path = (evidence_path.parent / reference).resolve()
+            _evidence_file_record(archive_path, archive_record, "archive", errors)
+    archive: dict[str, Any] | None = None
+    if archive_path and archive_path.is_file():
+        try:
+            archive = load_json(archive_path)
+            errors.extend(f"archive: {error}" for error in validate_archive(archive))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+            errors.append(f"archive could not be read: {error}")
+    if archive is not None and isinstance(archive_record, dict):
+        current = _evidence_archive_summary(archive_path, archive)
+        for key in ("sha256", "size_bytes", "schema_version", "message_count", "participant_count"):
+            if archive_record.get(key) != current.get(key):
+                errors.append(f"archive summary mismatch: {key}")
+        expected_coverage = verify_transcript_coverage(archive_path)
+        reported_coverage = evidence.get("coverage")
+        if not isinstance(reported_coverage, dict) or reported_coverage.get("status") != expected_coverage.get("status"):
+            errors.append("coverage summary mismatch: status")
+    assets = evidence.get("local_assets")
+    if not isinstance(assets, list):
+        errors.append("local_assets must be an array")
+        assets = []
+    reported_paths: set[str] = set()
+    for index, record in enumerate(assets):
+        if not isinstance(record, dict):
+            errors.append(f"local_assets[{index}] must be an object")
+            continue
+        reference = record.get("path")
+        if not isinstance(reference, str) or _normalise_local_reference(reference) != reference:
+            errors.append(f"local_assets[{index}].path must be a safe relative path")
+            continue
+        if reference in reported_paths:
+            errors.append(f"local_assets[{index}].path duplicates {reference!r}")
+        reported_paths.add(reference)
+        path = (evidence_path.parent / reference).resolve()
+        try:
+            path.relative_to(evidence_path.parent)
+        except ValueError:
+            errors.append(f"local_assets[{index}].path escapes the archive directory")
+            continue
+        exists = record.get("exists")
+        if not isinstance(exists, bool):
+            errors.append(f"local_assets[{index}].exists must be boolean")
+        elif exists:
+            _evidence_file_record(path, record, f"local_assets[{index}]", errors)
+        elif path.is_file():
+            errors.append(f"local_assets[{index}] is marked missing but exists")
+    if archive is not None:
+        expected_paths = _asset_references(archive)
+        errors.extend(f"evidence is missing asset record: {path}" for path in sorted(expected_paths - reported_paths))
+        errors.extend(f"evidence lists an unexpected asset: {path}" for path in sorted(reported_paths - expected_paths))
+    return errors
+
+
+def _redacted_coverage(value: Any, message_id_map: dict[str, str]) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    result: dict[str, Any] = {}
+    for key in (
+        "version", "status", "complete", "range_count", "unique_message_count",
+        "duplicate_message_count", "conflict_count", "start_confirmed", "end_confirmed", "ranges_linked",
+    ):
+        if key in value and isinstance(value[key], (str, int, bool)) and not isinstance(value[key], float):
+            result[key] = value[key]
+    result["unlinked_ranges"] = []
+    result["notes"] = ["Coverage metrics retained; source filenames and message IDs were anonymized."]
+    result["next_action"] = "No further capture step is required for the observed rendered range." if result.get("complete") else "Capture overlapping ranges from the original conversation if more coverage is needed."
+    ranges = value.get("ranges")
+    if isinstance(ranges, list):
+        result["ranges"] = [
+            {
+                "source_file": f"range-{index:03d}.json",
+                "message_count": item.get("message_count", 0) if isinstance(item.get("message_count"), int) else 0,
+                "oldest_message_id": message_id_map.get(str(item.get("oldest_message_id"))) if item.get("oldest_message_id") is not None else None,
+                "oldest_timestamp": item.get("oldest_timestamp"),
+                "newest_message_id": message_id_map.get(str(item.get("newest_message_id"))) if item.get("newest_message_id") is not None else None,
+                "newest_timestamp": item.get("newest_timestamp"),
+                "at_start": bool(item.get("at_start")),
+                "at_end": bool(item.get("at_end")),
+                "has_capture_range": bool(item.get("has_capture_range", True)),
+                "overlap_with_previous": item.get("overlap_with_previous", 0) if isinstance(item.get("overlap_with_previous"), int) else 0,
+            }
+            for index, item in enumerate(ranges, start=1)
+            if isinstance(item, dict)
+        ]
+    return result
+
+
+def redact_archive(input_path: Path, output_path: Path, profile: str = "safe-share") -> dict[str, Any]:
+    """Create a safe-share copy without message content, identities, or source refs."""
+
+    input_path = input_path.resolve()
+    output_path = output_path.resolve()
+    if input_path == output_path:
+        raise ValueError("Redaction cannot overwrite the source archive")
+    if profile != "safe-share":
+        raise ValueError("Only the safe-share redaction profile is supported")
+    archive = load_json(input_path)
+    errors = validate_archive(archive)
+    if errors:
+        raise ValueError("Cannot redact an invalid archive:\n- " + "\n- ".join(errors))
+    participants = archive.get("participants") if isinstance(archive.get("participants"), list) else []
+    participant_map: dict[str, str] = {}
+    redacted_participants: list[dict[str, Any]] = []
+    for index, participant in enumerate(participants, start=1):
+        if not isinstance(participant, dict):
+            continue
+        old_id = str(participant.get("id") or f"participant-{index}")
+        new_id = f"participant-{index:03d}"
+        participant_map[old_id] = new_id
+        redacted_participants.append({"id": new_id, "display_name": f"Participant {index}", "username": new_id})
+    messages = archive.get("messages") if isinstance(archive.get("messages"), list) else []
+    message_id_map = {
+        str(message.get("id")): f"message-{index:06d}"
+        for index, message in enumerate(messages, start=1)
+        if isinstance(message, dict) and message.get("id") is not None
+    }
+    redacted_messages: list[dict[str, Any]] = []
+    for index, message in enumerate(messages, start=1):
+        if not isinstance(message, dict):
+            continue
+        has_content = bool(str(message.get("content") or "").strip())
+        media = message.get("media") if isinstance(message.get("media"), list) else []
+        redacted_media = [
+            {
+                "kind": item.get("kind") if isinstance(item, dict) and item.get("kind") in _MEDIA_KINDS else "unknown",
+                "label": "Redacted media",
+                "placeholder": "Media content removed by the safe-share profile.",
+            }
+            for item in media
+        ]
+        new_message: dict[str, Any] = {
+            "id": message_id_map.get(str(message.get("id")), f"message-{index:06d}"),
+            "author_id": participant_map.get(str(message.get("author_id")), "participant-001"),
+            "timestamp": message.get("timestamp"),
+            "content": "[redacted]" if has_content else "",
+            "content_kind": "mixed" if has_content and redacted_media else "visible_text" if has_content else "media_placeholder" if redacted_media else "empty",
+            "media": redacted_media,
+            "provenance": {"redacted": True},
+        }
+        for field in ("saved_state", "retention"):
+            indicator = message.get(field)
+            if isinstance(indicator, dict) and indicator.get("state") in (_SAVED_STATES if field == "saved_state" else _RETENTION_STATES):
+                new_message[field] = {"state": indicator["state"], "visible": bool(indicator.get("visible", True))}
+        if isinstance(message.get("grouped"), bool):
+            new_message["grouped"] = message["grouped"]
+        redacted_messages.append(new_message)
+    source = {
+        "type": "redacted_archive",
+        "label": "CatchThat safe-share redaction",
+        "capture_method": "local_redaction",
+        "read_only": True,
+        "notes": [
+            "Message content, participant identities, source URLs, source references, avatars, and local media paths were removed or replaced.",
+            "Timestamps, media counts, saved-state indicators, and selected coverage metrics were retained for layout and audit testing.",
+        ],
+    }
+    metadata = archive.get("metadata") if isinstance(archive.get("metadata"), dict) else {}
+    redacted_metadata: dict[str, Any] = {
+        "kind": metadata.get("kind") if isinstance(metadata.get("kind"), str) and metadata.get("kind").strip() else "snapchat_chat",
+        "title": "Redacted conversation",
+        "display_timezone": metadata.get("display_timezone") if isinstance(metadata.get("display_timezone"), str) else "UTC",
+        "captured_at": metadata.get("captured_at"),
+        "source": source,
+        "redaction": {"profile": "safe-share", "content": "replaced", "identifiers": "remapped", "media": "removed"},
+    }
+    coverage = _redacted_coverage(metadata.get("coverage"), message_id_map)
+    if coverage is not None:
+        redacted_metadata["coverage"] = coverage
+    redacted_archive = {"schema_version": SCHEMA_VERSION, "metadata": redacted_metadata, "participants": redacted_participants, "messages": redacted_messages}
+    errors = validate_archive(redacted_archive)
+    if errors:
+        raise ValueError("Redacted archive did not validate:\n- " + "\n- ".join(errors))
+    write_json(output_path, redacted_archive)
+    return redacted_archive
+
+
+def _catalog_slug(value: Any, fallback: str, used: set[str]) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", str(value or "").casefold()).strip("-") or fallback
+    candidate = base
+    suffix = 2
+    while candidate in used:
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    used.add(candidate)
+    return candidate
+
+
+def _catalog_manifest(output_dir: Path) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    for path in sorted(output_dir.rglob("*")):
+        if not path.is_file() or path == output_dir / "manifest.json":
+            continue
+        reference = _safe_output_reference(path, output_dir)
+        files.append({"path": reference, "size_bytes": path.stat().st_size, "sha256": _sha256(path)})
+    return {"manifest_version": 1, "catalog_version": CATALOG_VERSION, "files": files}
+
+
+def build_catalog(input_paths: list[Path], output_dir: Path) -> dict[str, Any]:
+    """Build a local metadata catalog linking several CatchThat viewers."""
+
+    if not input_paths:
+        raise ValueError("At least one archive input is required")
+    resolved_inputs = [path.resolve() for path in input_paths]
+    output_dir = output_dir.resolve()
+    if len({str(path) for path in resolved_inputs}) != len(resolved_inputs):
+        raise ValueError("build-catalog received the same archive more than once")
+    entries: list[dict[str, Any]] = []
+    used_ids: set[str] = set()
+    prepared: list[tuple[Path, dict[str, Any]]] = []
+    for input_path in resolved_inputs:
+        if not input_path.is_file():
+            raise FileNotFoundError(f"Archive file does not exist: {input_path}")
+        if input_path.parent == output_dir or output_dir in input_path.parents:
+            raise ValueError("Catalog inputs must not be inside the catalog output directory")
+        archive = load_json(input_path)
+        errors = validate_archive(archive)
+        if errors:
+            raise ValueError(f"Archive validation failed for {input_path.name}:\n- " + "\n- ".join(errors))
+        prepared.append((input_path, archive))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for index, (input_path, archive) in enumerate(prepared, start=1):
+        metadata = archive.get("metadata", {})
+        archive_id = _catalog_slug(metadata.get("title") or input_path.stem, f"archive-{index}", used_ids)
+        viewer_path = Path("archives") / archive_id
+        build_archive(input_path, output_dir / viewer_path)
+        coverage = metadata.get("coverage") if isinstance(metadata.get("coverage"), dict) else {}
+        entries.append({
+            "archive_id": archive_id,
+            "title": str(metadata.get("title") or input_path.stem),
+            "kind": str(metadata.get("kind") or "snapchat_chat"),
+            "captured_at": metadata.get("captured_at"),
+            "message_count": len(archive.get("messages", [])) if isinstance(archive.get("messages"), list) else 0,
+            "participant_count": len(archive.get("participants", [])) if isinstance(archive.get("participants"), list) else 0,
+            "coverage_status": coverage.get("status", "unverified"),
+            "viewer_path": (viewer_path / "index.html").as_posix(),
+        })
+    catalog = {
+        "catalog_version": CATALOG_VERSION,
+        "title": "CatchThat archives",
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "archives": entries,
+    }
+    write_json(output_dir / "catalog.json", catalog)
+    css = """:root{color-scheme:light;--yellow:#fffc00;--ink:#183248;--muted:#5f7180;--paper:#f5f7f8;--line:#d7e0e5}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 system-ui,sans-serif}main{max-width:960px;margin:0 auto;padding:48px 24px}header{display:flex;align-items:end;justify-content:space-between;gap:24px;border-bottom:1px solid var(--line);padding-bottom:24px}h1{margin:0;font-size:clamp(2rem,5vw,3.4rem);letter-spacing:-.04em}.eyebrow{font:700 11px/1.2 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}.archive-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:28px}.archive-card{display:block;padding:20px;border:1px solid var(--line);border-radius:18px;background:#fff;color:inherit;text-decoration:none;box-shadow:0 8px 24px #1832480d}.archive-card:hover,.archive-card:focus-visible{border-color:var(--ink);transform:translateY(-2px)}.archive-card h2{margin:8px 0;font-size:1.2rem}.archive-meta{display:flex;flex-wrap:wrap;gap:8px;color:var(--muted);font-size:12px}.status{display:inline-flex;padding:3px 8px;border-radius:999px;background:#fffed0;color:#6b5800;font-weight:700}.empty{margin-top:28px;color:var(--muted)}"""
+    js = """(() => {\n  \"use strict\";\n  const catalog = window.__CATCHTHAT_CATALOG__ || {};\n  const grid = document.getElementById(\"archive-grid\");\n  const archives = Array.isArray(catalog.archives) ? catalog.archives : [];\n  for (const entry of archives) {\n    const link = document.createElement(\"a\");\n    link.className = \"archive-card\";\n    link.href = entry.viewer_path;\n    const eyebrow = document.createElement(\"div\"); eyebrow.className = \"eyebrow\"; eyebrow.textContent = entry.kind || \"Snapchat chat\"; link.appendChild(eyebrow);\n    const heading = document.createElement(\"h2\"); heading.textContent = entry.title || entry.archive_id || \"Archive\"; link.appendChild(heading);\n    const meta = document.createElement(\"div\"); meta.className = \"archive-meta\"; meta.textContent = `${entry.message_count ?? 0} messages · ${entry.participant_count ?? 0} people`; link.appendChild(meta);\n    const status = document.createElement(\"span\"); status.className = \"status\"; status.textContent = entry.coverage_status || \"unverified\"; link.appendChild(status);\n    grid.appendChild(link);\n  }\n  if (!archives.length) { const empty = document.createElement(\"p\"); empty.className = \"empty\"; empty.textContent = \"No archives are in this catalog.\"; grid.appendChild(empty); }\n})();\n"""
+    html_text = """<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"theme-color\" content=\"#fffc00\"><meta name=\"referrer\" content=\"no-referrer\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; base-uri 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none';\"><title>CatchThat archives</title><link rel=\"stylesheet\" href=\"catalog.css\"></head><body><main><header><div><div class=\"eyebrow\">Private local archive</div><h1>CatchThat</h1></div><div class=\"eyebrow\">Read-only catalog</div></header><section id=\"archive-grid\" class=\"archive-grid\" aria-label=\"Local archives\"></section></main><script src=\"catalog.js\" defer></script></body></html>"""
+    (output_dir / "catalog.css").write_text(css, encoding="utf-8", newline="\n")
+    payload = json.dumps(catalog, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    (output_dir / "catalog.js").write_text(f"window.__CATCHTHAT_CATALOG__ = {payload};\n{js}", encoding="utf-8", newline="\n")
+    (output_dir / "index.html").write_text(html_text, encoding="utf-8", newline="\n")
+    write_json(output_dir / "manifest.json", _catalog_manifest(output_dir))
+    return {"archives": len(entries), "entries": entries, "output": output_dir}
+
+
+def verify_catalog(output_dir: Path) -> list[str]:
+    """Verify a catalog manifest, metadata index, and linked viewers."""
+
+    output_dir = output_dir.resolve()
+    if not output_dir.is_dir():
+        return [f"catalog directory does not exist: {output_dir}"]
+    errors: list[str] = []
+    try:
+        manifest = load_json(output_dir / "manifest.json")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        return [f"manifest.json could not be read: {error}"]
+    if manifest.get("manifest_version") != 1:
+        errors.append("manifest_version must be 1")
+    if manifest.get("catalog_version") != CATALOG_VERSION:
+        errors.append(f"catalog_version must be {CATALOG_VERSION}")
+    entries = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    seen: set[str] = set()
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            errors.append(f"manifest.files[{index}] must be an object")
+            continue
+        reference = entry.get("path")
+        if not isinstance(reference, str) or _normalise_local_reference(reference) != reference:
+            errors.append(f"manifest.files[{index}].path must be a safe relative path")
+            continue
+        if reference in seen:
+            errors.append(f"manifest.files[{index}].path duplicates {reference!r}")
+        seen.add(reference)
+        path = (output_dir / reference).resolve()
+        try:
+            path.relative_to(output_dir)
+        except ValueError:
+            errors.append(f"manifest.files[{index}].path escapes the catalog directory")
+            continue
+        if not path.is_file():
+            errors.append(f"missing generated file: {reference}")
+            continue
+        if path.stat().st_size != entry.get("size_bytes"):
+            errors.append(f"size mismatch: {reference}")
+        if _sha256(path) != entry.get("sha256"):
+            errors.append(f"hash mismatch: {reference}")
+    for required in ("catalog.json", "catalog.css", "catalog.js", "index.html"):
+        if required not in seen:
+            errors.append(f"manifest is missing required file: {required}")
+    try:
+        catalog = load_json(output_dir / "catalog.json")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        return errors + [f"catalog.json could not be read: {error}"]
+    if catalog.get("catalog_version") != CATALOG_VERSION:
+        errors.append(f"catalog.json catalog_version must be {CATALOG_VERSION}")
+    archives = catalog.get("archives") if isinstance(catalog.get("archives"), list) else []
+    archive_ids: set[str] = set()
+    for index, entry in enumerate(archives):
+        if not isinstance(entry, dict):
+            errors.append(f"catalog.archives[{index}] must be an object")
+            continue
+        archive_id = entry.get("archive_id")
+        if not isinstance(archive_id, str) or _normalise_local_reference(archive_id) != archive_id or archive_id in archive_ids:
+            errors.append(f"catalog.archives[{index}].archive_id must be unique and safe")
+            continue
+        archive_ids.add(archive_id)
+        viewer_path = entry.get("viewer_path")
+        if not isinstance(viewer_path, str) or _normalise_local_reference(viewer_path) != viewer_path or not viewer_path.startswith("archives/") or not viewer_path.endswith("/index.html"):
+            errors.append(f"catalog.archives[{index}].viewer_path must point into archives/")
+            continue
+        viewer_dir = (output_dir / viewer_path).parent.resolve()
+        errors.extend(f"{archive_id}: {error}" for error in verify_build(viewer_dir))
+    return errors
+
+
+def _load_capture_session(session_path: Path) -> dict[str, Any]:
+    session = load_json(session_path.resolve())
+    if session.get("session_version") != CAPTURE_SESSION_VERSION or session.get("type") != CAPTURE_SESSION_TYPE:
+        raise ValueError("Invalid CatchThat capture session")
+    if not isinstance(session.get("captures"), list):
+        raise ValueError("Capture session captures must be an array")
+    return session
+
+
+def init_capture_session(output_path: Path, title: str | None = None, thread_id: str | None = None) -> dict[str, Any]:
+    output_path = output_path.resolve()
+    if output_path.exists():
+        raise ValueError(f"Capture session already exists: {output_path}")
+    session = {
+        "session_version": CAPTURE_SESSION_VERSION,
+        "type": CAPTURE_SESSION_TYPE,
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "title": title or "Snapchat capture session",
+        "thread_id": thread_id,
+        "captures": [],
+        "reached_start": False,
+        "reached_end": False,
+    }
+    write_json(output_path, session)
+    return session
+
+
+def _session_capture_paths(session_path: Path, session: dict[str, Any]) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for index, capture in enumerate(session.get("captures", [])):
+        if not isinstance(capture, dict):
+            raise ValueError(f"Capture session capture {index + 1} must be an object")
+        reference = _normalise_local_reference(capture.get("path"))
+        if reference is None or reference in seen:
+            raise ValueError(f"Capture session capture {index + 1} has an unsafe or duplicate path")
+        seen.add(reference)
+        path = (session_path.parent / reference).resolve()
+        if path.parent != session_path.parent:
+            raise ValueError("Capture session captures must be beside the session file")
+        if not path.is_file():
+            raise FileNotFoundError(f"Capture file does not exist: {reference}")
+        expected_hash = capture.get("sha256")
+        if not isinstance(expected_hash, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", expected_hash) or _sha256(path).lower() != expected_hash.lower():
+            raise ValueError(f"Capture changed after it was added to the session: {reference}")
+        paths.append(path)
+    return paths
+
+
+def add_capture_to_session(session_path: Path, input_path: Path) -> dict[str, Any]:
+    session_path = session_path.resolve()
+    input_path = input_path.resolve()
+    session = _load_capture_session(session_path)
+    if input_path.parent != session_path.parent or input_path == session_path:
+        raise ValueError("Capture and session files must be beside one another")
+    value = _load_json_value(input_path)
+    records = _transcript_records(value)
+    metadata = _transcript_metadata(value)
+    capture_thread_id = metadata.get("thread_id") or metadata.get("channel_id")
+    if session.get("thread_id") and capture_thread_id and str(session["thread_id"]) != str(capture_thread_id):
+        raise ValueError("Capture belongs to a different thread identity")
+    if not session.get("thread_id") and capture_thread_id:
+        session["thread_id"] = str(capture_thread_id)
+    reference = input_path.name
+    if any(isinstance(item, dict) and item.get("path") == reference for item in session["captures"]):
+        raise ValueError(f"Capture is already in the session: {reference}")
+    summary = _capture_range_summary(reference, records, metadata)
+    session["captures"].append({
+        "path": reference,
+        "sha256": _sha256(input_path),
+        "message_count": summary["message_count"],
+        "oldest_message_id": summary["oldest_message_id"],
+        "oldest_timestamp": summary["oldest_timestamp"],
+        "newest_message_id": summary["newest_message_id"],
+        "newest_timestamp": summary["newest_timestamp"],
+        "at_start": summary["at_start"],
+        "at_end": summary["at_end"],
+    })
+    write_json(session_path, session)
+    return capture_session_status(session_path)
+
+
+def capture_session_status(session_path: Path) -> dict[str, Any]:
+    session_path = session_path.resolve()
+    session = _load_capture_session(session_path)
+    paths = _session_capture_paths(session_path, session)
+    ranges: list[dict[str, Any]] = []
+    messages_by_id: dict[str, dict[str, Any]] = {}
+    duplicates = 0
+    conflicts = 0
+    for path in paths:
+        value = _load_json_value(path)
+        records = _transcript_records(value)
+        metadata = _transcript_metadata(value)
+        ranges.extend(_capture_range_summaries(path.name, records, metadata))
+        for index, record in enumerate(records):
+            key = _raw_message_id(record, index) or _message_digest(record, index)
+            existing = messages_by_id.get(key)
+            if existing is None:
+                messages_by_id[key] = record
+            else:
+                duplicates += 1
+                if _message_fingerprint(existing) != _message_fingerprint(record):
+                    conflicts += 1
+    coverage = _coverage_report(
+        ranges,
+        duplicate_count=duplicates,
+        conflict_count=conflicts,
+        reached_start=bool(session.get("reached_start")),
+        reached_end=bool(session.get("reached_end")),
+    )
+    return {
+        "session": session_path.name,
+        "title": session.get("title"),
+        "thread_id": session.get("thread_id"),
+        "capture_count": len(paths),
+        "message_count": len(messages_by_id),
+        "coverage": coverage,
+        "next_action": coverage.get("next_action"),
+    }
+
+
+def finalize_capture_session(session_path: Path, output_path: Path, reached_start: bool = False, reached_end: bool = False) -> dict[str, Any]:
+    session_path = session_path.resolve()
+    output_path = output_path.resolve()
+    session = _load_capture_session(session_path)
+    paths = _session_capture_paths(session_path, session)
+    if not paths:
+        raise ValueError("Capture session has no ranges to finalize")
+    if output_path.parent != session_path.parent or output_path in {session_path, *paths}:
+        raise ValueError("Finalized archive must be a new file beside the capture session")
+    session["reached_start"] = bool(session.get("reached_start")) or reached_start
+    session["reached_end"] = bool(session.get("reached_end")) or reached_end
+    summary = merge_transcripts(paths, output_path, reached_start=session["reached_start"], reached_end=session["reached_end"])
+    session["finalized_archive"] = output_path.name
+    session["finalized_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    session["coverage"] = summary["coverage"]
+    write_json(session_path, session)
+    return {"output": output_path.name, **summary}

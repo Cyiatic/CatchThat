@@ -38,10 +38,10 @@ python -m catchthat export-text fixtures/sample/archive.json
 python -m unittest discover -s tests -v
 ```
 
-The generated directory is portable: copy `index.html`, `app.js`,
+The generated directory is portable: copy `index.html`, `app.css`, `app.js`,
 `archive.json`, `manifest.json`, and its local `assets/` together. `verify`
-checks the archive, required files, referenced assets, sizes, and SHA-256
-hashes.
+checks the archive, required files, referenced assets, sizes, SHA-256 hashes,
+and the generated offline CSP boundary.
 
 ## Import a capture or supplied transcript
 
@@ -95,8 +95,10 @@ index, and absolute paths are omitted from the normalized archive.
    for the current range, `{scroll: "older"}`/`{scroll: "newer"}` for one
    bounded step, or `{walk: "older", max_steps: 40}` (or `newer`) for an
    attended foreground walk. It waits for the visible DOM to settle and stops
-   at a boundary, no-progress result, unchanged rendered window, or the step
-   cap; it never starts a background job. Save each returned JSON object as
+   at a boundary, no-progress result, or the bounded step cap; repeated
+   rendered windows are recorded as provenance but do not stop a walk while
+   scrollTop is still moving. It never starts a background job. Save each
+   returned JSON object as
    `private-data\range-001.json`, `range-002.json`, and so on.
 4. Review the returned `metadata.source.notes`, `metadata.thread_identity`,
    `metadata.capture_range`, `selector_notes`, and the message count before
@@ -113,6 +115,11 @@ coverage still depends on observed boundaries and linked ranges, and never
 claims unseen or deleted history. See
 `docs/live-smoke-test.md` for the exact next validation step and selector
 uncertainty.
+
+For Snapchat’s grouped message markup, the adapter records leaf message rows
+instead of the surrounding aggregate `<li>`, carries a visible group timestamp
+or author forward only with explicit provenance, and uses stable source IDs or
+visible DOM paths to prevent duplicate enumeration.
 
 ## Merge overlapping ranges and verify coverage
 
@@ -137,6 +144,51 @@ conflicts must be absent. A `verified` report means verified from the observed
 rendered ranges, not proof that Snapchat had no unseen or deleted messages.
 Incomplete reports always include a concrete next action, and the viewer
 repeats it in a prominent coverage banner.
+
+## Review, share, and organize archives locally
+
+The Concordance comparison identified several useful archive-engine features
+that fit CatchThat without widening its Snapchat safety boundary:
+
+```powershell
+# Keep a tamper-evident, message-free provenance sidecar.
+python -m catchthat export-evidence `
+  --input private-data\conversation.json `
+  --output private-data\conversation.evidence.json
+python -m catchthat verify-evidence private-data\conversation.evidence.json
+
+# Make an anonymized copy for a bug report or UI fixture; the source is never overwritten.
+python -m catchthat redact `
+  --input private-data\conversation.json `
+  --output private-data\conversation.safe-share.json
+
+# Track multiple attended ranges before merging them.
+python -m catchthat capture-session init `
+  --output private-data\conversation.session.json `
+  --title "Example capture"
+python -m catchthat capture-session add `
+  --session private-data\conversation.session.json `
+  --input private-data\range-001.json
+python -m catchthat capture-session status --session private-data\conversation.session.json
+python -m catchthat capture-session finalize `
+  --session private-data\conversation.session.json `
+  --output private-data\conversation.merged.json
+
+# Build one local launcher for several archives. The catalog is metadata-only;
+# each linked archive remains a separately integrity-checked viewer.
+python -m catchthat build-catalog `
+  --input private-data\conversation-a.archive.json `
+  --input private-data\conversation-b.archive.json `
+  --output private-data\catalog
+python -m catchthat verify-catalog private-data\catalog
+```
+
+Evidence contains archive hashes, coverage/boundary metrics, source metadata
+and local-asset hashes, but never message bodies or participant collections.
+The safe-share profile removes content, identities, source links, avatar paths,
+and media bytes while retaining timestamps and enough coverage/media shape for
+layout and audit testing. The session ledger stores only relative capture paths
+and hashes, so a changed raw capture is rejected before finalization.
 
 ## Archive format
 
@@ -194,14 +246,23 @@ read as visible pixels, the adapter supplies a bounded PNG data URL and
 and cross-origin or otherwise unreadable media remain explicit placeholders or
 references. The same rule applies to participant avatars under
 `assets/avatars/` with `avatar_provenance`; otherwise `avatar_ref` remains
-reference-only. Participant `visible_profile` fields contain only metadata
+reference-only. Snapchat avatar images can be layout-only `<img>` elements
+without alt text or semantic class names, so the foreground adapter also
+recognizes small square images only when they are in the visible author context
+or a named header/list item. Participant `visible_profile` fields contain only metadata
 exposed in the captured DOM (for example a handle, status, label, or source ID).
 
 ## Current status
 
-The fixture, validator, importer, range merge/coverage verifier, attended
-capture adapter, test suite, offline viewer, and GitHub Actions smoke build are
-included. The current signed-in Aiden Lautt smoke test confirms the selectors
-and bounded foreground walk on this layout, while repeated message boundaries
-leave additional history/loading behavior unverified. The project does not
-store live data in the repository.
+The fixture, validator, importer, range merge/coverage verifier, capture-session
+ledger, metadata evidence verifier, safe-share redactor, multi-archive catalog,
+attended capture adapter, test suite, offline viewer, and GitHub Actions smoke
+build are included. The current signed-in Air BNB smoke test reaches both observed
+rendered boundaries even when Snapchat keeps the same DOM rows while the pane
+moves; repeated windows are recorded as evidence instead of prematurely
+stopping the walk. That run captured 77 unique rows across eight bounded ranges,
+seven visible participants, and eleven media placeholders that became visible
+only during the newer walk. The archive is still explicit about the limits of
+visible-DOM coverage: deleted or unseen history is not established, and
+cross-origin avatars/media remain reference-only when pixels are unreadable.
+The project does not store live data in the repository.

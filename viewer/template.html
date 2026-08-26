@@ -159,20 +159,20 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
     .message-list { min-height: 260px; }
     .date-divider { display: flex; align-items: center; gap: 12px; padding: 17px 18px 8px; color: var(--muted); font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .date-divider::after { content: ""; height: 1px; flex: 1; background: var(--line); }
-    .message-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 11px; padding: 14px 18px; border-bottom: 1px solid var(--line); scroll-margin: 20px; content-visibility: auto; contain-intrinsic-size: 0 96px; transition: background 150ms ease, box-shadow 150ms ease; }
+    .message-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 11px; padding: 14px 18px; border-bottom: 1px solid var(--line); scroll-margin: 20px; content-visibility: auto; contain-intrinsic-size: 0 96px; transition: background 150ms ease, box-shadow 150ms ease; }
     .message-row:hover { background: #fbfcfc; }
     .message-row:focus-visible { position: relative; z-index: 1; }
     .message-row.is-selected { background: var(--yellow-wash); box-shadow: inset 0 -2px 0 var(--yellow); }
     .message-avatar { width: 40px; height: 40px; border-radius: 12px; object-fit: cover; background: var(--panel-deep); }
     .avatar-fallback { display: grid; place-items: center; color: var(--teal); font-family: var(--mono); font-size: 11px; font-weight: 850; }
     .message-main { min-width: 0; }
-    .message-byline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; min-width: 0; }
+    .message-byline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; width: 100%; min-width: 0; }
     .message-author { font-size: 13px; font-weight: 820; }
     .message-id { overflow: hidden; color: var(--muted); font-family: var(--mono); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
     .message-content { max-width: 72ch; margin-top: 3px; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 15px; }
     .message-content.is-empty { color: var(--muted); font-style: italic; }
     .message-content mark { padding: 0 2px; border-radius: 3px; background: var(--yellow); color: var(--ink); }
-    .message-time { align-self: start; min-height: 44px; padding: 6px 4px; border: 0; background: transparent; color: var(--muted); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+    .message-time { align-self: baseline; min-height: 28px; margin-left: auto; padding: 2px 0 0 8px; border: 0; background: transparent; color: var(--muted); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
     .message-time:hover { color: var(--ink); text-decoration: underline; }
     .evidence-line { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
     .evidence-badge, .media-placeholder, .source-link { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; padding: 4px 7px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); color: var(--ink-soft); font-family: var(--mono); font-size: 10px; }
@@ -247,7 +247,7 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
       .result-count { display: block; margin-top: 7px; }
       .message-row { grid-template-columns: 34px minmax(0, 1fr); gap: 9px; padding: 13px 12px; }
       .message-avatar { width: 34px; height: 34px; border-radius: 10px; }
-      .message-time { grid-column: 2; justify-self: start; margin-top: 2px; }
+      .message-time { grid-column: auto; justify-self: auto; margin-top: 0; }
       .window-controls { align-items: flex-start; flex-direction: column; }
       .window-actions { width: 100%; justify-content: flex-start; }
       .window-button { min-width: max-content; min-height: 44px; }
@@ -574,7 +574,7 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
     .date-divider::after { display: none; }
     .message-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr);
       gap: 8px;
       width: min(100%, 680px);
       margin: 0 auto 3px 0;
@@ -585,24 +585,25 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
       scroll-margin: 18px;
     }
     .message-row:hover { background: transparent; }
+    .message-row.is-selected, .message-row.speaker-coral.is-selected { background: transparent; box-shadow: none; }
     .message-row .message-avatar { display: none; }
-    .message-main { min-width: 0; padding: 7px 10px 8px; border-radius: 2px; background: var(--snap-bubble); }
-    .message-row.speaker-cyan .message-main { box-shadow: inset 3px 0 #1da1ff; }
-    .message-row.speaker-coral .message-main { box-shadow: inset 3px 0 var(--coral); }
-    .message-byline { gap: 8px; margin-bottom: 1px; }
+    .message-main { min-width: 0; padding: 0; background: transparent; }
+    .message-byline { gap: 8px; margin: 0 0 4px; padding: 0 10px; }
     .message-author { color: #1da1ff; font-size: 11px; font-weight: 800; letter-spacing: .01em; text-transform: uppercase; }
     .speaker-coral .message-author { color: #ff477e; }
     .message-id, .message-username { display: none; }
-    .message-content { max-width: none; margin: 0; color: #f2f2f3; font-size: 15px; line-height: 1.35; }
+    .message-content { max-width: none; margin: 0; padding: 7px 10px 8px; border-radius: 2px; background: var(--snap-bubble); color: #f2f2f3; font-size: 15px; line-height: 1.35; }
+    .message-row.speaker-cyan .message-content { box-shadow: inset 3px 0 #1da1ff; }
+    .message-row.speaker-coral .message-content { box-shadow: inset 3px 0 var(--coral); }
     .message-content.is-empty { color: var(--snap-muted); font-size: 13px; }
-    .message-time { align-self: start; min-height: 0; padding: 5px 1px 0; color: var(--snap-muted); font-size: 10px; }
+    .message-time { align-self: baseline; min-height: 0; margin-left: auto; padding: 0 0 0 8px; color: var(--snap-muted); font-size: 10px; }
     .message-time:hover { color: var(--yellow); }
     .message-row.is-continuation { margin-top: -2px; }
-    .message-row.is-continuation .message-main { padding-top: 5px; border-top-left-radius: 0; border-bottom-left-radius: 2px; }
+    .message-row.is-continuation .message-main { padding-top: 0; }
     .message-row.is-continuation .message-author { display: none; }
-    .message-row.is-continuation .message-byline { min-height: 0; margin: 0; }
-    .message-row.is-continuation .message-byline::before { content: ""; display: block; height: 1px; }
-    .message-row.is-selected .message-main { background: #403d00; box-shadow: inset 3px 0 var(--yellow), inset 0 0 0 1px rgba(255, 252, 0, .28); }
+    .message-row.is-continuation .message-byline { min-height: 0; margin: 0 0 2px; padding-right: 10px; justify-content: flex-end; }
+    .message-row.is-continuation .message-byline::before { display: none; }
+    .message-row.is-selected .message-content { background: #403d00; box-shadow: inset 3px 0 var(--yellow), inset 0 0 0 1px rgba(255, 252, 0, .28); }
     .message-row.is-selected .message-time { color: var(--yellow); }
     .evidence-line { gap: 4px; margin-top: 7px; }
     .evidence-badge, .media-placeholder, .source-link { min-height: 20px; padding: 3px 6px; border-color: #4a4c50; border-radius: 4px; background: #252629; font-size: 9px; }
@@ -880,7 +881,7 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
           <div class="search-wrap">
             <label class="sr-only" for="search-input">Search this archive</label>
             <span class="search-icon" aria-hidden="true">⌕</span>
-            <input class="search-input" id="search-input" name="q" type="search" placeholder="Search" autocomplete="off">
+            <input class="search-input" id="search-input" name="q" type="search" placeholder="Search messages…" autocomplete="off">
             <span class="search-hint" aria-hidden="true">/</span>
           </div>
           <div class="result-count" id="result-count" role="status" aria-live="polite">0 messages</div>
@@ -977,15 +978,38 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
     const clean = (value) => String(value ?? "").replace(/[ \t\f\v]+/g, " ").trim();
     const displayName = (id) => { const participant = participants.get(id); return participant?.display_name || participant?.username || id || "Unknown participant"; };
     const initials = (value) => clean(value).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "?";
-    const safePath = (value) => typeof value === "string" && value && !/^(?:https?|data):\/\//i.test(value) ? value : null;
-    const safeHttp = (value) => typeof value === "string" && /^https?:\/\//i.test(value) ? value : null;
+    const safePath = (value) => {
+      if (typeof value !== "string" || !value.trim()) return null;
+      const candidate = value.trim().replace(/\\/g, "/");
+      if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|\/)/i.test(candidate) || candidate.includes("\0")) return null;
+      const parts = candidate.split("/");
+      if (!parts.length || parts.some((part) => !part || part === "." || part === "..")) return null;
+      return parts.join("/");
+    };
+    const safeHttp = (value) => {
+      if (typeof value !== "string" || !/^https?:\/\//i.test(value.trim())) return null;
+      try {
+        const parsed = new URL(value.trim());
+        return parsed.hostname && (parsed.protocol === "http:" || parsed.protocol === "https:") ? parsed.href : null;
+      } catch {
+        return null;
+      }
+    };
     const localZone = metadata.display_timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     const dateFormatter = (timeZone, options) => { try { return new Intl.DateTimeFormat(undefined, { timeZone, ...options }); } catch { return new Intl.DateTimeFormat(undefined, { timeZone: "UTC", ...options }); } };
-    const timeLabel = (timestamp, mode) => {
+    const timeLabel = (timestamp, mode, precision = "exact") => {
       const date = new Date(timestamp);
       if (Number.isNaN(date.getTime())) return String(timestamp || "");
       const zone = mode === "utc" ? "UTC" : localZone;
+      if (precision === "date") return dateFormatter(zone, { dateStyle: "medium" }).format(date);
       return dateFormatter(zone, { dateStyle: "medium", timeStyle: "short" }).format(date);
+    };
+    const messageTimeLabel = (timestamp, mode, precision = "exact") => {
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return String(timestamp || "");
+      const zone = mode === "utc" ? "UTC" : localZone;
+      if (precision === "date") return dateFormatter(zone, { month: "short", day: "numeric", year: "numeric" }).format(date);
+      return dateFormatter(zone, { timeStyle: "short" }).format(date);
     };
     const dateLabel = (timestamp, mode) => {
       const date = new Date(timestamp);
@@ -1114,7 +1138,8 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
       if (!Array.isArray(message.source_refs)) return;
       message.source_refs.forEach((reference) => {
         if (!reference || typeof reference !== "object") return;
-        if (reference.url) { const link = document.createElement("a"); link.className = "source-link"; link.href = reference.url; link.target = "_blank"; link.rel = "noreferrer noopener"; link.textContent = `↗ ${reference.label || "Source reference"}`; container.appendChild(link); }
+        const sourceUrl = safeHttp(reference.url);
+        if (sourceUrl) { const link = document.createElement("a"); link.className = "source-link"; link.href = sourceUrl; link.target = "_blank"; link.rel = "noreferrer noopener"; link.textContent = `↗ ${reference.label || "Source reference"}`; container.appendChild(link); }
         else container.appendChild(make("span", "source-link", `↗ ${reference.label || "Source reference"}`));
       });
     };
@@ -1231,7 +1256,7 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
       const evidence = clear(byId("visible-evidence"));
       if (!message) { selected.appendChild(make("p", "panel-note", "No message selected.")); return; }
       const participant = participants.get(message.author_id) || { id: message.author_id, display_name: message.author_id };
-      selected.appendChild(make("div", "kicker", "Selected message")); selected.appendChild(renderParticipantProfile(participant)); selected.appendChild(make("h3", "", `Captured at ${timeLabel(message.timestamp, state.timestampMode)}`));
+      selected.appendChild(make("div", "kicker", "Selected message")); selected.appendChild(renderParticipantProfile(participant)); selected.appendChild(make("h3", "", `Captured at ${timeLabel(message.timestamp, state.timestampMode, message.timestamp_precision)}`));
       const detailHeading = make("h3", "", "Record coordinates"); details.appendChild(detailHeading);
       const dl = make("dl", "detail-list");
       const provenance = message.provenance || {};
@@ -1245,13 +1270,16 @@ FORM: Operate/Read Snapchat-style two-pane reader with an on-demand provenance d
     const renderMessage = (message, continuation = false) => {
       const participant = participants.get(message.author_id) || { id: message.author_id, display_name: message.author_id };
       const speakerClass = (participantOrder.get(message.author_id) || 0) % 2 ? "speaker-coral" : "speaker-cyan";
-      const row = make("article", `message-row ${speakerClass}`); row.dataset.messageId = message.id; row.dataset.authorId = message.author_id || ""; row.tabIndex = 0; row.setAttribute("aria-label", `${displayName(message.author_id)} message ${timeLabel(message.timestamp, state.timestampMode)}`); row.setAttribute("role", "listitem"); if (continuation) row.classList.add("is-continuation"); if (state.selected === message.id) row.classList.add("is-selected");
+      const fullTime = timeLabel(message.timestamp, state.timestampMode, message.timestamp_precision);
+      const shortTime = messageTimeLabel(message.timestamp, state.timestampMode, message.timestamp_precision);
+      const row = make("article", `message-row ${speakerClass}`); row.dataset.messageId = message.id; row.dataset.authorId = message.author_id || ""; row.tabIndex = 0; row.setAttribute("aria-label", `${displayName(message.author_id)} message ${fullTime}`); row.setAttribute("role", "listitem"); if (continuation) row.classList.add("is-continuation"); if (state.selected === message.id) row.classList.add("is-selected");
       row.appendChild(renderAvatar(participant, "message-avatar"));
-      const main = make("div", "message-main"); const byline = make("div", "message-byline"); byline.appendChild(make("span", "message-author", displayName(message.author_id))); const handle = participant.visible_profile?.handle || participant.username; if (handle && handle !== displayName(message.author_id)) byline.appendChild(make("span", "message-username", `@${String(handle).replace(/^@/, "")}`)); byline.appendChild(make("span", "message-id", `#${message.id}`)); main.appendChild(byline);
+      const main = make("div", "message-main"); const byline = make("div", "message-byline"); byline.appendChild(make("span", "message-author", displayName(message.author_id))); const handle = participant.visible_profile?.handle || participant.username; if (handle && handle !== displayName(message.author_id)) byline.appendChild(make("span", "message-username", `@${String(handle).replace(/^@/, "")}`)); byline.appendChild(make("span", "message-id", `#${message.id}`));
+      const timeButton = make("button", "message-time"); timeButton.type = "button"; timeButton.title = `Select ${message.id}`; timeButton.setAttribute("aria-label", `Select message ${message.id}, ${fullTime}`); const timeElement = make("time", "message-time-label", shortTime); timeElement.dateTime = rawUtc(message.timestamp); timeButton.appendChild(timeElement); timeButton.addEventListener("click", (event) => { event.stopPropagation(); selectMessage(message.id); }); byline.appendChild(timeButton); main.appendChild(byline);
       const content = make("div", `message-content${message.content ? "" : " is-empty"}`); if (message.content) content.appendChild(contentSearchNode(message.content, state.query)); else content.textContent = message.media?.length ? "Media placeholder — no visible text" : "No visible text recorded"; main.appendChild(content);
       const evidenceLine = make("div", "evidence-line"); const saved = indicatorBadge(message, "saved_state", "Saved"); const retention = indicatorBadge(message, "retention", "Retention"); if (saved) evidenceLine.appendChild(saved); if (retention) evidenceLine.appendChild(retention); appendMedia(evidenceLine, message); appendRefs(evidenceLine, message); if (evidenceLine.childNodes.length) main.appendChild(evidenceLine);
       if (state.selected === message.id) row.setAttribute("aria-current", "true");
-      row.appendChild(main); const timeButton = make("button", "message-time", timeLabel(message.timestamp, state.timestampMode)); timeButton.type = "button"; timeButton.title = `Select ${message.id}`; timeButton.setAttribute("aria-label", `Select message ${message.id}, ${timeLabel(message.timestamp, state.timestampMode)}`); timeButton.addEventListener("click", (event) => { event.stopPropagation(); selectMessage(message.id); }); row.appendChild(timeButton);
+      row.appendChild(main);
       const choose = () => selectMessage(message.id);
       row.addEventListener("click", choose); row.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(); } });
       return row;

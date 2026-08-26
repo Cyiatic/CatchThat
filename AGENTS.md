@@ -57,6 +57,15 @@ python -m catchthat merge-captures `
   --input private-data\range-002.json `
   --output private-data\merged-transcript.json
 python -m catchthat verify-coverage private-data\merged-transcript.json
+python -m catchthat export-evidence --input private-data\conversation.json --output private-data\conversation.evidence.json
+python -m catchthat verify-evidence private-data\conversation.evidence.json
+python -m catchthat redact --input private-data\conversation.json --output private-data\conversation.safe-share.json
+python -m catchthat capture-session init --output private-data\conversation.session.json --title "Snapchat capture"
+python -m catchthat capture-session add --session private-data\conversation.session.json --input private-data\range-001.json
+python -m catchthat capture-session status --session private-data\conversation.session.json
+python -m catchthat capture-session finalize --session private-data\conversation.session.json --output private-data\conversation.final.json
+python -m catchthat build-catalog --input private-data\conversation.json --output private-data\catalog
+python -m catchthat verify-catalog private-data\catalog
 python -m unittest discover -s tests -v
 ```
 
@@ -84,6 +93,9 @@ boundaries and an overlap-linked chain still govern coverage status.
 ## Viewer rules
 
 - The generated viewer is static, dependency-free, and works offline.
+- Generated viewers extract CSS/JavaScript into same-origin files and carry a
+  restrictive offline CSP; the source template is not itself the shipped
+  artifact.
 - The viewer is visibly read-only and keeps the partial-coverage state
   prominent.
 - Search covers the complete normalized archive; message rendering is bounded
@@ -91,6 +103,17 @@ boundaries and an overlap-linked chain still govern coverage status.
 - Author filters, timestamp modes, source/provenance details, media
   placeholders, print/PDF output, and the generated SHA-256 manifest remain
   available without a live Snapchat session.
+
+## Concordance-derived local tooling
+
+CatchThat includes the compatible subset of Concordance’s archive workflow:
+metadata-only evidence export/verification, safe-share redaction, a local
+multi-archive catalog, and a relative-path/hash capture-session ledger.
+Concordance’s remote media materialization, official platform data-package
+import, optional encryption dependency, Discord-specific migration, and
+remote telemetry are intentionally not ported. Snapchat capture remains
+visible-DOM-only, and adding Sentry or any network telemetry would violate the
+local-first/no-background-network boundary.
 
 ## Live smoke-test handoff
 

@@ -5,13 +5,22 @@ import sys
 from pathlib import Path
 
 from .core import (
+    add_capture_to_session,
+    build_catalog,
     build_archive,
+    capture_session_status,
+    export_evidence,
+    finalize_capture_session,
     import_transcript,
+    init_capture_session,
     load_json,
     merge_transcripts,
+    redact_archive,
     render_text,
     validate_archive,
+    verify_catalog,
     verify_build,
+    verify_evidence,
     verify_transcript_coverage,
 )
 
@@ -36,6 +45,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify = subparsers.add_parser("verify", help="verify a generated viewer, archive, and local assets")
     verify.add_argument("input", type=_path)
+
+    redact = subparsers.add_parser("redact", help="create a safe-share archive without private content or identities")
+    redact.add_argument("--input", required=True, type=_path)
+    redact.add_argument("--output", required=True, type=_path)
+    redact.add_argument("--profile", default="safe-share", choices=("safe-share",))
+
+    evidence = subparsers.add_parser("export-evidence", help="export a message-free provenance and integrity report")
+    evidence.add_argument("--input", required=True, type=_path)
+    evidence.add_argument("--output", required=True, type=_path)
+
+    evidence_verify = subparsers.add_parser("verify-evidence", help="verify a metadata-only evidence report")
+    evidence_verify.add_argument("input", type=_path)
+
+    catalog = subparsers.add_parser("build-catalog", help="build a local launcher for multiple normalized archives")
+    catalog.add_argument("--input", action="append", required=True, type=_path, help="archive JSON; repeat for each chat")
+    catalog.add_argument("--output", required=True, type=_path)
+
+    catalog_verify = subparsers.add_parser("verify-catalog", help="verify a local multi-archive catalog")
+    catalog_verify.add_argument("input", type=_path)
 
     for name in ("import-capture", "import-transcript"):
         importer = subparsers.add_parser(
@@ -69,6 +97,23 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("input", type=_path)
     export.add_argument("--output", type=_path)
     export.add_argument("--timezone", help="override the archive display timezone")
+
+    session = subparsers.add_parser("capture-session", help="track overlapping attended Snapchat capture ranges")
+    session_commands = session.add_subparsers(dest="session_command", required=True)
+    session_init = session_commands.add_parser("init", help="create an empty capture session ledger")
+    session_init.add_argument("--output", required=True, type=_path)
+    session_init.add_argument("--title")
+    session_init.add_argument("--thread-id")
+    session_add = session_commands.add_parser("add", help="add one saved visible-DOM capture range")
+    session_add.add_argument("--session", required=True, type=_path)
+    session_add.add_argument("--input", required=True, type=_path)
+    session_status = session_commands.add_parser("status", help="show range coverage and next capture action")
+    session_status.add_argument("--session", required=True, type=_path)
+    session_finalize = session_commands.add_parser("finalize", help="merge session ranges into an archive")
+    session_finalize.add_argument("--session", required=True, type=_path)
+    session_finalize.add_argument("--output", required=True, type=_path)
+    session_finalize.add_argument("--reached-start", action="store_true")
+    session_finalize.add_argument("--reached-end", action="store_true")
     return parser
 
 
@@ -103,6 +148,44 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"ERROR: {error}", file=sys.stderr)
                 return 2
             print(f"Verified offline viewer: {args.input}")
+            return 0
+
+        if args.command == "redact":
+            archive = redact_archive(args.input, args.output, profile=args.profile)
+            print(f"Redacted archive: {args.output}")
+            print(f"Messages retained: {len(archive['messages'])}")
+            print(f"Profile: {args.profile}")
+            return 0
+
+        if args.command == "export-evidence":
+            evidence = export_evidence(args.input, args.output)
+            print(f"Exported evidence report: {args.output}")
+            print(f"Archive SHA-256: {evidence['archive']['sha256']}")
+            print(f"Coverage: {evidence['coverage'].get('status', 'unverified')}")
+            return 0
+
+        if args.command == "verify-evidence":
+            errors = verify_evidence(args.input)
+            if errors:
+                for error in errors:
+                    print(f"ERROR: {error}", file=sys.stderr)
+                return 2
+            print(f"Verified evidence report: {args.input}")
+            return 0
+
+        if args.command == "build-catalog":
+            summary = build_catalog(args.input, args.output)
+            print(f"Built archive catalog: {args.output / 'index.html'}")
+            print(f"Archives: {summary['archives']}")
+            return 0
+
+        if args.command == "verify-catalog":
+            errors = verify_catalog(args.input)
+            if errors:
+                for error in errors:
+                    print(f"ERROR: {error}", file=sys.stderr)
+                return 2
+            print(f"Verified archive catalog: {args.input}")
             return 0
 
         if args.command in {"import-capture", "import-transcript"}:
@@ -181,6 +264,38 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(text)
             return 0
+
+        if args.command == "capture-session":
+            if args.session_command == "init":
+                init_capture_session(args.output, title=args.title, thread_id=args.thread_id)
+                print(f"Created capture session: {args.output}")
+                return 0
+            if args.session_command == "add":
+                status = add_capture_to_session(args.session, args.input)
+                print(f"Added capture to session: {args.session}")
+                print(f"Ranges: {status['capture_count']}")
+                print(f"Coverage: {status['coverage'].get('status', 'unverified')}")
+                return 0
+            if args.session_command == "status":
+                status = capture_session_status(args.session)
+                print(f"Session: {status['session']}")
+                print(f"Ranges: {status['capture_count']}")
+                print(f"Messages: {status['message_count']}")
+                print(f"Coverage: {status['coverage'].get('status', 'unverified')}")
+                if status.get("next_action"):
+                    print(f"Next action: {status['next_action']}")
+                return 0
+            if args.session_command == "finalize":
+                summary = finalize_capture_session(
+                    args.session,
+                    args.output,
+                    reached_start=args.reached_start,
+                    reached_end=args.reached_end,
+                )
+                print(f"Finalized capture session: {args.output}")
+                print(f"Messages: {summary['messages']}")
+                print(f"Coverage: {summary['coverage'].get('status', 'unverified')}")
+                return 0
     except (OSError, ValueError, FileNotFoundError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1

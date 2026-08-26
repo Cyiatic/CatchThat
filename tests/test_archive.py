@@ -16,13 +16,22 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from catchthat.cli import main as cli_main  # noqa: E402
 from catchthat.core import (  # noqa: E402
     _template_path,
+    add_capture_to_session,
+    build_catalog,
     build_archive,
+    capture_session_status,
+    export_evidence,
+    finalize_capture_session,
     import_transcript,
+    init_capture_session,
     load_json,
     merge_transcripts,
+    redact_archive,
     render_text,
     validate_archive,
+    verify_catalog,
     verify_build,
+    verify_evidence,
     verify_transcript_coverage,
 )
 
@@ -42,7 +51,7 @@ class ArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "sample"
             self.assertEqual(build_archive(self.fixture, output), [])
-            for name in ("index.html", "app.js", "archive.json", "manifest.json"):
+            for name in ("index.html", "app.css", "app.js", "archive.json", "manifest.json"):
                 self.assertTrue((output / name).is_file())
             self.assertTrue((output / "assets" / "avatars" / "mara.svg").is_file())
             self.assertTrue((output / "assets" / "media" / "recipe-screenshot.svg").is_file())
@@ -51,6 +60,9 @@ class ArchiveTests(unittest.TestCase):
             app = (output / "app.js").read_text(encoding="utf-8")
             self.assertIn("CatchThat", html)
             self.assertIn('src="app.js"', html)
+            self.assertIn('<link rel="stylesheet" href="app.css">', html)
+            self.assertIn("Content-Security-Policy", html)
+            self.assertNotIn("<style>", html)
             self.assertIn("window.__ARCHIVE_DATA__", app)
             self.assertIn("Barely. I saved the recipe screenshot.", app)
             self.assertIn("coverage-banner", app)
@@ -72,6 +84,61 @@ class ArchiveTests(unittest.TestCase):
             self.assertIn("assets/avatars/mara.svg", {entry["path"] for entry in manifest["files"]})
             (output / "app.js").write_text(app + "\n// tampered", encoding="utf-8")
             self.assertTrue(any("hash mismatch: app.js" in error for error in verify_build(output)))
+
+    def test_evidence_is_message_free_and_verifiable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive_path = root / "archive.json"
+            archive_path.write_text(json.dumps(self.archive), encoding="utf-8")
+            evidence_path = root / "archive.evidence.json"
+            evidence = export_evidence(archive_path, evidence_path)
+            serialized = json.dumps(evidence)
+            self.assertNotIn("Are you still up?", serialized)
+            self.assertNotIn('"messages"', serialized)
+            self.assertEqual(verify_evidence(evidence_path), [])
+            evidence["archive"]["message_count"] = 999
+            evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+            self.assertTrue(any("summary mismatch" in error for error in verify_evidence(evidence_path)))
+
+    def test_safe_share_redaction_remaps_people_and_removes_private_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "archive.json"
+            source.write_text(json.dumps(self.archive), encoding="utf-8")
+            redacted = redact_archive(source, root / "redacted.json")
+            self.assertEqual(validate_archive(redacted), [])
+            serialized = json.dumps(redacted)
+            self.assertNotIn("Mara", serialized)
+            self.assertNotIn("Are you still up?", serialized)
+            self.assertNotIn("example.invalid", serialized)
+            self.assertEqual(redacted["participants"][0]["id"], "participant-001")
+            self.assertEqual(redacted["messages"][0]["id"], "message-000001")
+            self.assertTrue(redacted["messages"][0]["content"] in {"[redacted]", ""})
+
+    def test_catalog_and_capture_session_are_integrity_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive_path = root / "archive.json"
+            archive_path.write_text(json.dumps(self.archive), encoding="utf-8")
+            # The fixture assets live beside the source archive in the checkout;
+            # build_catalog is exercised with that real source path so its child
+            # viewer can verify local assets too.
+            catalog = root / "catalog"
+            build_catalog([self.fixture], catalog)
+            self.assertEqual(verify_catalog(catalog), [])
+            self.assertTrue((catalog / "archives" / "mara-and-eli" / "app.css").is_file())
+
+            capture = root / "capture.json"
+            capture.write_text(json.dumps(self.archive), encoding="utf-8")
+            session_path = root / "session.json"
+            init_capture_session(session_path, title="Mara and Eli")
+            status = add_capture_to_session(session_path, capture)
+            self.assertEqual(status["capture_count"], 1)
+            self.assertEqual(capture_session_status(session_path)["message_count"], 7)
+            finalized = root / "final.json"
+            summary = finalize_capture_session(session_path, finalized, reached_start=True, reached_end=True)
+            self.assertEqual(summary["coverage"]["status"], "verified")
+            self.assertEqual(validate_archive(load_json(finalized)), [])
 
     def test_text_export_is_readable_and_preserves_media_state(self) -> None:
         output = render_text(self.archive)
@@ -143,6 +210,11 @@ class ArchiveTests(unittest.TestCase):
                                 "saved_state": "Saved in chat",
                                 "retention": "View once",
                                 "source_refs": [{"label": "A visible link", "url": "https://example.invalid/source"}],
+                                "provenance": {
+                                    "timestamp_inferred": True,
+                                    "timestamp_source": "visible_group_timestamp",
+                                    "notes": ["Grouped timestamp is approximate."],
+                                },
                             }
                         ],
                     }
@@ -155,6 +227,8 @@ class ArchiveTests(unittest.TestCase):
             message = archive["messages"][0]
             self.assertEqual(message["provenance"]["source_file"], "capture.json")
             self.assertEqual(message["provenance"]["record_index"], 0)
+            self.assertTrue(message["provenance"]["timestamp_inferred"])
+            self.assertEqual(message["provenance"]["timestamp_source"], "visible_group_timestamp")
             self.assertEqual(message["saved_state"]["state"], "saved")
             self.assertEqual(message["retention"]["state"], "view_once")
             self.assertEqual(message["media"][0]["path"], "assets/images/photo.svg")
@@ -378,12 +452,20 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("scrollTo_fallback", capture_source)
         self.assertIn("message_ids", capture_source)
         self.assertIn("repeated_ranges", capture_source)
-        self.assertIn("rendered_window_unchanged", capture_source)
+        self.assertIn("unchanged_window_steps", capture_source)
         self.assertIn("settle_ms", capture_source)
+        self.assertIn("grouped siblings", capture_source)
+        self.assertIn("timestamp_inferred", capture_source)
+        self.assertIn("visible_group_timestamp", capture_source)
         self.assertIn("generated_id_collision_index", capture_source)
+        self.assertIn("nodePath", capture_source)
+        self.assertIn("uniqueRows", capture_source)
+        self.assertIn("hasNestedMessageRows", capture_source)
+        self.assertIn("messageGroupFor", capture_source)
+        self.assertIn("groupAuthorLabel", capture_source)
         self.assertIn("no follow-up scroll", capture_source)
         self.assertIn("visible DOM", capture_source)
-        self.assertIn("timestamp-anchored", capture_source)
+        self.assertIn("timestamp metadata", capture_source)
         self.assertIn("main li", capture_source)
         self.assertIn("[dir='auto']", capture_source)
         self.assertIn("headerAuthor", capture_source)
@@ -391,6 +473,10 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("captureVisibleAvatar", capture_source)
         self.assertIn("captureVisibleMedia", capture_source)
         self.assertIn("canvas.toDataURL", capture_source)
+        self.assertIn("avatarVisualSelector", capture_source)
+        self.assertIn("isAvatarLike", capture_source)
+        self.assertIn("namedGlobalVisualElements", capture_source)
+        self.assertIn('tag === "canvas"', capture_source)
         self.assertIn("Object.isExtensible", capture_source)
         self.assertIn("document?.createElement", capture_source)
         self.assertIn("avatar_data_url", capture_source)
@@ -401,16 +487,16 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("profileLink", capture_source)
         self.assertIn("favicon|site[- ]?icon|link[- ]?icon", capture_source)
         self.assertIn("currentSrc", capture_source)
-        self.assertIn('const headerElement = row.querySelector("header")', capture_source)
+        self.assertIn('const headerElement = authorContext.querySelector("header")', capture_source)
         self.assertIn("detectedKind === \"unknown\"", capture_source)
-        for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click("):
+        for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click(", "innerHTML"):
             self.assertNotIn(forbidden, capture_source)
 
     def test_capture_controls_are_visible_user_triggered_and_local(self) -> None:
         controls_source = (PROJECT_ROOT / "tools" / "snapchat_capture_controls.js").read_text(encoding="utf-8")
         for label in ("Capture current", "Walk older", "Walk newer", "api.lastResult", "currently rendered chat window", 'typeof capture === "function"'):
             self.assertIn(label, controls_source)
-        for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click("):
+        for forbidden in ("document.cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "WebSocket", ".click(", "innerHTML"):
             self.assertNotIn(forbidden, controls_source)
 
     def test_merge_deduplicates_overlap_and_verifies_boundaries(self) -> None:
@@ -587,6 +673,18 @@ class ArchiveTests(unittest.TestCase):
         self.assertIn("const selectedIndex = filtered.findIndex", template)
         self.assertIn(".coverage-banner { max-width: none;", template)
         self.assertNotIn(".search-row, .coverage-banner", template)
+
+    def test_viewer_matches_snapchat_message_header_rhythm(self) -> None:
+        template = _template_path().read_text(encoding="utf-8")
+        self.assertIn('placeholder="Search messages…"', template)
+        self.assertIn('const messageTimeLabel = (timestamp, mode, precision = "exact")', template)
+        self.assertIn('if (precision === "date")', template)
+        self.assertIn('const timeElement = make("time", "message-time-label", shortTime)', template)
+        self.assertIn("timeElement.dateTime = rawUtc(message.timestamp)", template)
+        self.assertIn("byline.appendChild(timeButton)", template)
+        self.assertIn("grid-template-columns: minmax(0, 1fr);", template)
+        self.assertIn(".message-content { max-width: none; margin: 0; padding: 7px 10px 8px;", template)
+        self.assertNotIn("row.appendChild(main); const timeButton = make(\"button\", \"message-time\"", template)
 
 
 if __name__ == "__main__":

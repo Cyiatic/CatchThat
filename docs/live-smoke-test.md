@@ -1,7 +1,7 @@
 # Live selector smoke test
 
 The live adapter is intentionally conservative because Snapchat Web’s DOM is
-not a stable public API. A signed-in Rick Bailer chat was smoke-tested in the
+not a stable public API. A signed-in, user-opened chat was smoke-tested in the
 Codex in-app browser; use the same procedure for each new Snapchat Web layout:
 
 1. In the Codex in-app browser, sign in manually if needed. Never provide
@@ -24,8 +24,9 @@ Codex in-app browser; use the same procedure for each new Snapchat Web layout:
    direct evaluate path. It moves the
    current chat's visible message scroller by one bounded step, waits for the
    foreground DOM to settle, captures that range, and repeats only within this
-   user-triggered foreground run. It stops at a boundary, no progress, an
-   unchanged rendered message window, or the step cap; it never runs a
+   user-triggered foreground run. It stops at a boundary, no progress, or the
+   bounded step cap; repeated rendered windows are recorded as provenance but
+   do not stop a walk while scrollTop is still moving. It never runs a
    background loop. Use `{scroll: "older"}` or `{scroll: "newer"}` when
    validating one step only. `settle_ms` may be supplied for a slow layout and
    is bounded by the adapter.
@@ -61,6 +62,14 @@ exposed, the capture reports selector notes and skips uncertain rows rather
 than inventing dates or silently claiming coverage. Adjustments should remain
 DOM-only and read-only.
 
+Snapchat can render a message-group `<li>` around smaller message `<li>` rows.
+The adapter excludes that aggregate wrapper when it contains visible
+timestamped child rows, then retains the child rows as the message units. It
+also uses a source ID or visible DOM path to avoid counting the same rendered
+row twice when timestamp metadata and sibling discovery reach it through more
+than one selector path. Two genuinely separate rows with identical visible
+text, author, and timestamp remain separate records.
+
 For media, inspect the returned `messages[].media` entries and
 `participants[].visible_profile` values during the smoke test. The adapter
 preserves visible image/video/audio/sticker/Bitmoji kind, subtype, alt text,
@@ -70,43 +79,61 @@ include a bounded `avatar_data_url` when already-rendered pixels were readable;
 `import-capture` turns that into a local `assets/avatars/` file and records
 `avatar_provenance`. A rendered message `img` or Bitmoji/sticker canvas may
 similarly include bounded `media_data_url` pixels; import materializes those
-under `assets/media/` and records `media_provenance`. No remote fetch is used.
+under `assets/media/` and records `media_provenance`. Snapchat may expose a
+Bitmoji as a small square layout-only image with no alt text; the adapter uses
+the visible author/header context to associate it and can also capture a
+readable canvas avatar. No remote fetch is used.
 Confirm that a message image or Bitmoji is not incorrectly classified as the
 sender avatar, and that any visible profile metadata belongs to the current
 conversation row. When the page blocks pixel reads, confirm the viewer honestly
 falls back to the placeholder/reference-only state.
 
-The Rick Bailer smoke test captured six timestamped visible rows, skipped one
-visible row without a timezone-aware timestamp, and correctly reported a
-partial range (`at_start: false`, `at_end: true`). The resulting raw capture
-and normalized archive were validated and built locally under ignored
-`private-data/`; they were not committed or pushed.
+Earlier authorized smoke runs captured timestamped visible rows, skipped an
+uncertain row without a timezone-aware timestamp, and correctly reported
+partial ranges. Their raw captures and normalized archives were validated and
+built locally under ignored `private-data/`; they were not committed or
+pushed.
 
-A longer authorized Aiden Lautt smoke test validated the attended walk path
-without manual scroll input: `{walk: "older", max_steps: 40}` selected the
-conversation pane, performed two bounded steps, and stopped at
-`rendered_window_unchanged` after three captures. It observed 62 timestamped
-message rows, two participants, and eight media references; neither boundary
-was established (`at_start: false`, `at_end: false`). The oldest visible row was
-`local-9d4fe06b` at `2020-04-30T05:57:47.476Z`; the newest was `local-7f481427`
-at `2021-11-17T04:47:06.151Z`. The read-only evaluate surface did not expose
-canvas creation, so media and avatar pixels stayed as references/placeholders;
-no source bytes were fetched. This confirms the bounded-walk guard and selector
-shape on the current layout, but does not verify additional history/loading.
-The live result was treated as private and was not committed or pushed.
+One longer smoke run showed that the same DOM row IDs can repeat while the
+conversation pane moves. That result exposed a capture bug: stopping after two
+repeated windows could prevent the walk from reaching the oldest boundary in a
+non-virtualized pane. The live result was treated as private and was not
+committed or pushed.
 
-A follow-up Aiden run against the currently open chat captured the same 62
-timestamped rows at the oldest visible boundary (`at_start: true`,
-`at_end: false`). It preserved seven visible link-preview thumbnails and
-excluded seven decorative favicon nodes; two visible participants were
-retained with their visible labels. The normalized result is under ignored
-`private-data\\aiden-media-run-20260821.*` and remains a partial range, not a
-complete-chat claim.
+A follow-up run captured 62 timestamped rows at the oldest visible boundary
+(`at_start: true`, `at_end: false`). It preserved seven visible link-preview
+thumbnails and excluded seven decorative favicon nodes; two visible
+participants were retained with their visible labels. The normalized result
+remains a partial range, not a complete-chat claim.
 
-The current adapter treats two consecutive moved steps with the same rendered
-message IDs as `rendered_window_unchanged` and stops the walk early. This is an
-intentional guard against reporting scroll movement as pagination progress; a
-new signed-in run should record that stop reason before any selector tuning.
+The current adapter records repeated rendered message IDs through
+`unchanged_window_steps` and `repeated_ranges` evidence, but does not stop
+solely for that reason:
+non-virtualized Snapchat panes can keep the same DOM row set while scrollTop
+continues moving toward the oldest boundary. Boundary, no-progress, and bounded
+step-cap results govern the walk; repeated ranges remain a coverage caveat.
+
+A grouped-row smoke run after the deduplication fixes reached
+`at_start: true` with 40 leaf message rows, two attributed participants, and
+three media records. It skipped seven visible date-separator nodes (not message
+rows), preserved grouped timestamps as approximate provenance, and remained
+partial because `at_end: false`. The resulting viewer remained under ignored
+`private-data/`.
+
+A group-chat smoke run exercised the complementary newer walk. It produced 77
+unique rows from eight bounded ranges and seven foreground scroll steps, reached
+both observed boundaries, attributed all rows to seven visible participants,
+and reported zero unknown authors. Twenty-three rows inherited a timestamp from
+a visible message group, while two date-separator nodes were skipped. Eleven
+visible Snap-media nodes appeared only after walking toward the newest boundary;
+they were preserved as media placeholders with dimensions and opaque visible
+labels (two media-only rows, including one ten-item gallery), because no
+readable pixels or safe HTTP source reference was exposed. All seven participant
+avatars were reference-only for the same cross-origin pixel-read limitation.
+`verify-coverage` reported `Complete: True` for the observed rendered range,
+while retaining the caveat that deleted or unseen history cannot be established
+from visible DOM capture. The normalized archive and viewer remained under
+ignored `private-data/`.
 
 If the browser is logged out, stop at the synthetic smoke build in the README;
 do not attempt credential entry through CatchThat.

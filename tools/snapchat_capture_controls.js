@@ -25,22 +25,39 @@
     "padding:14px", "border:2px solid #fffc00", "border-radius:14px", "background:#171819", "color:#f5f5f5",
     "box-shadow:0 14px 40px rgba(0,0,0,.42)", "font:14px/1.4 system-ui,sans-serif",
   ].join(";");
-  panel.innerHTML = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-      <div>
-        <strong style="display:block;font-size:16px">CatchThat capture</strong>
-        <span style="display:block;color:#b5b6ba;font-size:12px">Visible, read-only · current chat only</span>
-      </div>
-      <button type="button" data-catchthat-action="close" aria-label="Close CatchThat controls" style="border:1px solid #555;background:#242628;color:#f5f5f5;border-radius:50%;width:28px;height:28px">×</button>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:12px">
-      <button type="button" data-catchthat-action="current" style="border:1px solid #fffc00;background:#fffc00;color:#101112;border-radius:8px;padding:8px 10px;font-weight:700">Capture current</button>
-      <button type="button" data-catchthat-action="older" style="border:1px solid #555;background:#242628;color:#f5f5f5;border-radius:8px;padding:8px 10px">Walk older</button>
-      <button type="button" data-catchthat-action="newer" style="border:1px solid #555;background:#242628;color:#f5f5f5;border-radius:8px;padding:8px 10px">Walk newer</button>
-    </div>
-    <p data-catchthat-status role="status" aria-live="polite" style="margin:10px 0 0;color:#b5b6ba;font-size:12px">Ready. Nothing has been captured yet.</p>
-    <textarea data-catchthat-result readonly aria-label="Latest CatchThat capture JSON" spellcheck="false" style="display:block;width:100%;height:92px;box-sizing:border-box;margin-top:10px;padding:8px;border:1px solid #3d3f42;border-radius:8px;background:#0f1011;color:#f5f5f5;font:11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical" placeholder="The latest JSON result appears here for local saving."></textarea>
-  `;
+  const make = (tag, attributes = {}, value = null) => {
+    const node = document.createElement(tag);
+    Object.entries(attributes).forEach(([name, attributeValue]) => node.setAttribute(name, attributeValue));
+    if (value !== null) node.textContent = value;
+    return node;
+  };
+  const header = make("div", { style: "display:flex;align-items:flex-start;justify-content:space-between;gap:12px" });
+  const copy = make("div");
+  copy.append(
+    make("strong", { style: "display:block;font-size:16px" }, "CatchThat capture"),
+    make("span", { style: "display:block;color:#b5b6ba;font-size:12px" }, "Visible, read-only · current chat only"),
+  );
+  const closeButton = make("button", {
+    type: "button", "data-catchthat-action": "close", "aria-label": "Close CatchThat controls",
+    style: "border:1px solid #555;background:#242628;color:#f5f5f5;border-radius:50%;width:28px;height:28px",
+  }, "×");
+  header.append(copy, closeButton);
+  const actions = make("div", { style: "display:flex;flex-wrap:wrap;gap:7px;margin-top:12px" });
+  actions.append(
+    make("button", { type: "button", "data-catchthat-action": "current", style: "border:1px solid #fffc00;background:#fffc00;color:#101112;border-radius:8px;padding:8px 10px;font-weight:700" }, "Capture current"),
+    make("button", { type: "button", "data-catchthat-action": "older", style: "border:1px solid #555;background:#242628;color:#f5f5f5;border-radius:8px;padding:8px 10px" }, "Walk older"),
+    make("button", { type: "button", "data-catchthat-action": "newer", style: "border:1px solid #555;background:#242628;color:#f5f5f5;border-radius:8px;padding:8px 10px" }, "Walk newer"),
+  );
+  const statusNode = make("p", {
+    "data-catchthat-status": "", role: "status", "aria-live": "polite",
+    style: "margin:10px 0 0;color:#b5b6ba;font-size:12px",
+  }, "Ready. Nothing has been captured yet.");
+  const resultNode = make("textarea", {
+    "data-catchthat-result": "", readonly: "", "aria-label": "Latest CatchThat capture JSON", spellcheck: "false",
+    style: "display:block;width:100%;height:92px;box-sizing:border-box;margin-top:10px;padding:8px;border:1px solid #3d3f42;border-radius:8px;background:#0f1011;color:#f5f5f5;font:11px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical",
+    placeholder: "The latest JSON result appears here for local saving.",
+  });
+  panel.append(header, actions, statusNode, resultNode);
   document.body.appendChild(panel);
 
   const status = panel.querySelector("[data-catchthat-status]");

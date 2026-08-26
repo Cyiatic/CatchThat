@@ -91,7 +91,7 @@ The kickoff brief supplies the desired readable unit:
     Person B: message 2
 
 Synthetic fixtures remain the committed source of truth. Private signed-in
-Rick Bailer and Aiden Lautt smoke runs supplied local evidence for the current
+smoke runs supplied local evidence for the current
 selector candidates, author metadata, visible media references, avatar-pixel
 path, and bounded scroll behavior. They do not establish a stable Snapchat DOM
 contract or prove unseen history; the live selector uncertainty and the exact
