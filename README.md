@@ -339,3 +339,12 @@ limits of visible-DOM coverage: deleted or unseen history is not established,
 and cross-origin avatars/media remain reference-only when pixels are
 unreadable.
 The project does not store live data in the repository.
+
+## AI Assistance Disclosure
+
+This project was developed with assistance from OpenAI Codex for
+implementation, capture-workflow design, layout cleanup, asset preparation,
+release checks, and documentation. The repository owner directed the work,
+supplied source material, reviewed and tested the resulting changes in the
+intended environment, and remains responsible for the project's security,
+accuracy, and final decisions.
