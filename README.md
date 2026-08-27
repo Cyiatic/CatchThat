@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/catchthat-logo.png" alt="CatchThat ghost vacuum logo" width="240">
+</p>
+
 # CatchThat
 
 CatchThat is a private/local-first Snapchat chat archiver. It turns a supplied

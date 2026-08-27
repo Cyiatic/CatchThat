@@ -21,7 +21,7 @@ try {
     foreach ($relative in @(".gitignore", "README.md", "PRODUCT.md", "DESIGN.md", "AGENTS.md", "security_best_practices_report.md", "pyproject.toml")) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $relative) -Destination (Join-Path $releaseRoot $relative)
     }
-    foreach ($relative in @(".github", "docs", "src", "viewer", "tools", "fixtures", "plugins", "scripts", "tests")) {
+    foreach ($relative in @(".github", "assets", "docs", "src", "viewer", "tools", "fixtures", "plugins", "scripts", "tests")) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $relative) -Destination (Join-Path $releaseRoot $relative) -Recurse
     }
 

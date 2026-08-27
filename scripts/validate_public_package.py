@@ -49,6 +49,9 @@ def validate(root: Path) -> list[str]:
     skill_path = root / "plugins" / "catchthat" / "skills" / "catchthat-archive" / "SKILL.md"
     if not skill_path.is_file():
         errors.append("CatchThat plugin skill is missing")
+    logo_path = root / "assets" / "catchthat-logo.png"
+    if not logo_path.is_file() or logo_path.stat().st_size == 0:
+        errors.append("CatchThat README logo is missing")
     return errors
 
 
