@@ -1,4 +1,4 @@
-<h1 align="center">
+<h1 align="left">
   <img src="assets/catchthat-logo.png" alt="" width="88" valign="middle">
   CatchThat
 </h1>
