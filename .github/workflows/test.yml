@@ -39,5 +39,10 @@ jobs:
         run: |
           public_root="$RUNNER_TEMP/catchthat-public-source"
           mkdir -p "$public_root"
-          git archive --format=tar HEAD | tar -x -C "$public_root"
+          # Keep the CI source snapshot aligned with the public release package.
+          # These paths are intentionally local-only and may contain user data or
+          # generated artifacts in a working checkout.
+          git archive --format=tar HEAD -- . \
+            ':(exclude)private-data' \
+            ':(exclude)output' | tar -x -C "$public_root"
           python "$public_root/scripts/validate_public_package.py" --root "$public_root"
