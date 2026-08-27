@@ -1,6 +1,6 @@
 # CatchThat security best-practices review
 
-Date: 2026-08-23
+Date: 2026-08-27
 
 Scope: the local CatchThat Python archive engine, generated static viewer,
 foreground capture helper, and the Concordance-derived local tooling added in
@@ -21,6 +21,9 @@ or remote API were accessed during this review.
 - Ownership-map runs over recent history reported no default-rule flagged
   orphaned sensitive paths or bus-factor hotspots in CatchThat or Concordance.
   This is a narrow heuristic, not a complete ownership audit.
+- Portable bundle tests cover round-trip import/export and the optional
+  password-protected AES-256-GCM path, including wrong-password rejection and
+  safe extraction limits.
 
 ## Findings
 
@@ -98,9 +101,11 @@ or remote API were accessed during this review.
   was added.
 - No Sentry integration was added. This project has no online runtime, and
   telemetry would conflict with the declared local-first boundary.
-- Concordance’s optional encrypted bundle and platform-specific import paths
-  were not copied; they require separate key-management or platform authority
-  decisions and are documented as deferred in `docs/concordance-gap-analysis.md`.
+- Concordance’s platform-specific import paths were not copied because they
+  would require platform authority outside the visible-DOM scope. Its useful
+  portable/encrypted sharing idea is now implemented as a local ZIP workflow
+  with an optional `cryptography` dependency. Encryption protects a bundle in
+  transit or at rest; it does not replace redaction or filesystem controls.
 
 ## Remaining validation limits
 

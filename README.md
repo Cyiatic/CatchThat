@@ -24,6 +24,33 @@ blob-only avatars remain references and are never fetched by the project.
 Real captures belong under `private-data/`, which is ignored by Git. Treat the
 archive as sensitive even though the viewer is offline.
 
+## Codex plugin and public package
+
+The repository includes a repo-local, skills-only Codex plugin at
+`plugins/catchthat/`. It packages the workflow, safety boundary, and CLI
+handoff without an MCP server or an account-access connector. The optional
+browser helper operates only on a chat the user has already opened and signed
+into themselves; CatchThat never receives credentials or browser session
+state.
+
+CatchThat is an offline archive companion, not a Snapchat/Discord profile
+reconstructor. It can preserve supplied or visibly rendered messages, bounded
+media/profile pixels, and provenance. It cannot recreate friend state, hidden
+history, or anything that was not supplied or rendered.
+
+Prepare a public/source-only attachment with the release script:
+
+```powershell
+.\scripts\package_release.ps1 -OutputPath dist\catchthat-release.zip
+```
+
+The script allowlists the source, documentation, tests, tools, plugin, and
+synthetic fixture, then validates the staging tree. It never copies
+`private-data/` or generated `output/` content. This separation follows the
+[OpenAI plugin packaging model](https://developers.openai.com/plugins/build/plugins):
+the plugin is source-only and the local workflow remains explicit about what
+the user supplies and approves.
+
 ## Quick start with the synthetic fixture
 
 From `catchthat/` in Windows PowerShell:
@@ -190,6 +217,48 @@ and media bytes while retaining timestamps and enough coverage/media shape for
 layout and audit testing. The session ledger stores only relative capture paths
 and hashes, so a changed raw capture is rejected before finalization.
 
+### Portable and encrypted bundles
+
+Export only a reviewed viewer directory or redacted archive. The ZIP format is
+portable and can be imported into a new local directory with path and size
+checks:
+
+```powershell
+python -m catchthat export-bundle `
+  --input private-data\conversation-safe-view `
+  --output private-data\conversation.safe.catchthat.zip
+python -m catchthat import-bundle `
+  --input private-data\conversation.safe.catchthat.zip `
+  --output private-data\conversation-restored-view
+```
+
+For a password-protected share, install the optional dependency and keep the
+password out of command history. The CLI prompts securely unless a private
+password file is explicitly supplied:
+
+```powershell
+python -m pip install -e ".[secure]"
+python -m catchthat encrypt-bundle `
+  --input private-data\conversation.safe.catchthat.zip `
+  --output private-data\conversation.safe.catchthat.enc
+python -m catchthat decrypt-bundle `
+  --input private-data\conversation.safe.catchthat.enc `
+  --output private-data\conversation-decrypted-view
+```
+
+The convenience script redacts, builds, verifies, exports, and optionally
+encrypts in one local pipeline. It refuses to overwrite an existing output:
+
+```powershell
+.\scripts\share_archive.ps1 `
+  -ArchivePath private-data\conversation.json `
+  -OutputPath private-data\conversation.safe.catchthat.enc `
+  -Encrypt
+```
+
+Encryption provides confidentiality for the bundle; it does not replace
+redaction, access controls, or the archive’s integrity manifest.
+
 ## Archive format
 
 The normalized schema is versioned and intentionally explicit:
@@ -256,13 +325,12 @@ exposed in the captured DOM (for example a handle, status, label, or source ID).
 
 The fixture, validator, importer, range merge/coverage verifier, capture-session
 ledger, metadata evidence verifier, safe-share redactor, multi-archive catalog,
-attended capture adapter, test suite, offline viewer, and GitHub Actions smoke
-build are included. The current signed-in Air BNB smoke test reaches both observed
-rendered boundaries even when Snapchat keeps the same DOM rows while the pane
-moves; repeated windows are recorded as evidence instead of prematurely
-stopping the walk. That run captured 77 unique rows across eight bounded ranges,
-seven visible participants, and eleven media placeholders that became visible
-only during the newer walk. The archive is still explicit about the limits of
-visible-DOM coverage: deleted or unseen history is not established, and
-cross-origin avatars/media remain reference-only when pixels are unreadable.
+portable/encrypted bundle workflow, attended capture adapter, test suite,
+offline viewer, public-package validator, and GitHub Actions smoke build are
+included. The live smoke-test handoff remains intentionally generic: it needs
+one user-opened, signed-in chat after a Snapchat Web release change, and no
+live capture is stored in the repository. The archive is explicit about the
+limits of visible-DOM coverage: deleted or unseen history is not established,
+and cross-origin avatars/media remain reference-only when pixels are
+unreadable.
 The project does not store live data in the repository.

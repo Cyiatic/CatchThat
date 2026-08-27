@@ -1,0 +1,42 @@
+{
+  "name": "catchthat",
+  "version": "0.2.0",
+  "description": "A private, local-first workflow for archiving authorized Snapchat Web chats offline.",
+  "author": {
+    "name": "Cyiatic",
+    "url": "https://github.com/Cyiatic"
+  },
+  "homepage": "https://github.com/Cyiatic/catchthat",
+  "repository": "https://github.com/Cyiatic/catchthat",
+  "license": "MIT",
+  "keywords": [
+    "snapchat",
+    "offline archive",
+    "conversation capture",
+    "privacy",
+    "provenance"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "CatchThat",
+    "shortDescription": "Archive authorized Snapchat chats offline.",
+    "longDescription": "Turn a user-supplied transcript or a user-approved, visible-DOM capture of the currently open Snapchat Web chat into a searchable, read-only offline archive. CatchThat preserves provenance, media placeholders, visible profile metadata, coverage limits, and integrity checks; it never logs in, searches accounts, sends messages, reads browser stores, fetches remote media, or runs in the background.",
+    "developerName": "Cyiatic",
+    "category": "Productivity",
+    "capabilities": [
+      "Local files",
+      "Attended browser capture",
+      "Offline viewer",
+      "Optional encrypted sharing"
+    ],
+    "defaultPrompt": [
+      "Build an offline archive from this local capture.",
+      "Capture the Snapchat chat I have open, one approved range at a time.",
+      "Prepare a redacted, encrypted share bundle."
+    ],
+    "brandColor": "#FFFC00",
+    "composerIcon": "./assets/catchthat-mark.svg",
+    "logo": "./assets/catchthat-mark.svg",
+    "logoDark": "./assets/catchthat-mark.svg"
+  }
+}

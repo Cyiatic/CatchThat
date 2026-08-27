@@ -4,11 +4,16 @@ import base64
 import binascii
 import hashlib
 import html
+import io
 import json
 import mimetypes
 import re
+import secrets
 import shutil
+import struct
 import sysconfig
+import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -45,6 +50,12 @@ _DATA_MIME_EXTENSIONS = {
 }
 _AVATAR_DATA_MAX_BYTES = _MEDIA_DATA_MAX_BYTES
 _AVATAR_DATA_MIME_EXTENSIONS = _DATA_MIME_EXTENSIONS
+_BUNDLE_MAX_BYTES = 512 * 1024 * 1024
+_ENCRYPTED_MAGIC = b"CATCHTHAT-ENCRYPTED\x01"
+_ENCRYPTED_AAD = b"catchthat-encrypted-bundle-v1"
+_ENCRYPTED_FORMAT = "catchthat-encrypted-bundle"
+_PBKDF2_ITERATIONS = 600_000
+_MAX_PBKDF2_ITERATIONS = 5_000_000
 
 
 def _load_json_value(path: Path) -> Any:
@@ -1755,6 +1766,246 @@ def render_text(archive: dict[str, Any], timezone_name: str | None = None) -> st
         suffix = f" ({', '.join(indicator_parts)})" if indicator_parts else ""
         lines.append(f"{names.get(message.get('author_id'), message.get('author_id', 'Unknown'))}: {text} [{local_time}]{suffix}")
     return "\n".join(lines)
+
+
+def _bundle_file_entries(input_path: Path) -> list[tuple[str, Path]]:
+    """Return safe, regular files that can be placed into a portable bundle."""
+
+    input_path = input_path.resolve()
+    if input_path.is_file():
+        return [(input_path.name, input_path)]
+    if not input_path.is_dir():
+        raise FileNotFoundError(f"Bundle input does not exist: {input_path}")
+    entries: list[tuple[str, Path]] = []
+    for path in sorted(input_path.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.is_symlink():
+            raise ValueError(f"Bundle input contains a symbolic link: {path.name}")
+        resolved = path.resolve()
+        try:
+            relative = resolved.relative_to(input_path).as_posix()
+        except ValueError as error:
+            raise ValueError(f"Bundle input contains a file outside its directory: {path.name}") from error
+        if _normalise_local_reference(relative) != relative:
+            raise ValueError(f"Bundle input contains an unsafe relative path: {relative}")
+        entries.append((relative, path))
+    return entries
+
+
+def _bundle_bytes(input_path: Path) -> bytes:
+    entries = _bundle_file_entries(input_path)
+    total = sum(path.stat().st_size for _, path in entries)
+    if total > _BUNDLE_MAX_BYTES:
+        raise ValueError(f"Bundle input exceeds the {_BUNDLE_MAX_BYTES // (1024 * 1024)} MB limit")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        for relative, path in entries:
+            bundle.write(path, arcname=relative)
+    return buffer.getvalue()
+
+
+def _portable_bundle_bytes(input_path: Path) -> bytes:
+    """Return portable ZIP bytes without wrapping an existing ZIP as a file."""
+
+    input_path = input_path.resolve()
+    if input_path.is_file() and input_path.suffix.lower() == ".zip":
+        if input_path.stat().st_size > _BUNDLE_MAX_BYTES:
+            raise ValueError(f"Bundle input exceeds the {_BUNDLE_MAX_BYTES // (1024 * 1024)} MB limit")
+        data = input_path.read_bytes()
+        try:
+            with zipfile.ZipFile(io.BytesIO(data), "r") as bundle:
+                if bundle.testzip() is not None:
+                    raise ValueError("Bundle contains a corrupt file")
+        except zipfile.BadZipFile as error:
+            raise ValueError("Bundle input is not a valid ZIP archive") from error
+        return data
+    return _bundle_bytes(input_path)
+
+
+def _safe_bundle_member(value: str) -> str | None:
+    candidate = value.replace("\\", "/")
+    if not candidate or candidate.startswith("/") or re.match(r"^[A-Za-z]:", candidate):
+        return None
+    parts = [part for part in candidate.split("/") if part not in {"", "."}]
+    if not parts or ".." in parts:
+        return None
+    return "/".join(parts)
+
+
+def _extract_bundle_bytes(data: bytes, output_dir: Path) -> dict[str, Any]:
+    """Extract a bundle atomically after checking paths, links, and size limits."""
+
+    output_dir = output_dir.resolve()
+    if output_dir.exists():
+        if not output_dir.is_dir() or any(output_dir.iterdir()):
+            raise FileExistsError(f"Bundle output directory already exists and is not empty: {output_dir}")
+        raise FileExistsError(f"Bundle output directory already exists: {output_dir}")
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    temporary_dir = Path(tempfile.mkdtemp(prefix=".catchthat-bundle-", dir=output_dir.parent))
+    files = 0
+    expanded_bytes = 0
+    seen: set[str] = set()
+    try:
+        with zipfile.ZipFile(io.BytesIO(data), "r") as bundle:
+            for info in bundle.infolist():
+                relative = _safe_bundle_member(info.filename)
+                if relative is None:
+                    raise ValueError(f"Bundle contains an unsafe path: {info.filename!r}")
+                if relative in seen:
+                    raise ValueError(f"Bundle contains a duplicate path: {relative}")
+                seen.add(relative)
+                mode = (info.external_attr >> 16) & 0o170000
+                if mode == 0o120000:
+                    raise ValueError(f"Bundle contains a symbolic link: {relative}")
+                if info.is_dir():
+                    (temporary_dir / relative).mkdir(parents=True, exist_ok=True)
+                    continue
+                expanded_bytes += info.file_size
+                if expanded_bytes > _BUNDLE_MAX_BYTES:
+                    raise ValueError(f"Bundle expands beyond the {_BUNDLE_MAX_BYTES // (1024 * 1024)} MB limit")
+                destination = (temporary_dir / relative).resolve()
+                try:
+                    destination.relative_to(temporary_dir)
+                except ValueError as error:
+                    raise ValueError(f"Bundle path escapes its output directory: {relative}") from error
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with bundle.open(info, "r") as source, destination.open("wb") as target:
+                    shutil.copyfileobj(source, target, length=1024 * 256)
+                files += 1
+        temporary_dir.replace(output_dir)
+    except zipfile.BadZipFile as error:
+        shutil.rmtree(temporary_dir, ignore_errors=True)
+        raise ValueError("Bundle is not a valid ZIP archive") from error
+    except Exception:
+        shutil.rmtree(temporary_dir, ignore_errors=True)
+        raise
+    verified = False
+    if (output_dir / "archive.json").is_file() and (output_dir / "index.html").is_file():
+        errors = verify_build(output_dir)
+        if errors:
+            shutil.rmtree(output_dir, ignore_errors=True)
+            raise ValueError("Extracted bundle failed viewer verification:\n- " + "\n- ".join(errors))
+        verified = True
+    return {"output": output_dir, "files": files, "bytes": expanded_bytes, "verified": verified}
+
+
+def export_bundle(input_path: Path, output_path: Path) -> dict[str, Any]:
+    """Export an archive file or generated viewer directory as a portable ZIP."""
+
+    input_path = input_path.resolve()
+    output_path = output_path.resolve()
+    if output_path.exists():
+        raise FileExistsError(f"Bundle output already exists: {output_path}")
+    if input_path.is_dir():
+        try:
+            output_path.relative_to(input_path)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Bundle output cannot be inside its input directory")
+    data = _bundle_bytes(input_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(data)
+    return {"output": output_path, "bytes": len(data), "files": len(_bundle_file_entries(input_path))}
+
+
+def import_bundle(input_path: Path, output_dir: Path) -> dict[str, Any]:
+    """Safely extract a portable ZIP bundle and verify generated viewers."""
+
+    input_path = input_path.resolve()
+    if not input_path.is_file():
+        raise FileNotFoundError(f"Bundle file does not exist: {input_path}")
+    if input_path.stat().st_size > _BUNDLE_MAX_BYTES:
+        raise ValueError(f"Bundle file exceeds the {_BUNDLE_MAX_BYTES // (1024 * 1024)} MB limit")
+    return _extract_bundle_bytes(input_path.read_bytes(), output_dir)
+
+
+def _crypto_aesgcm() -> Any:
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    except ImportError as error:
+        raise RuntimeError("Encrypted bundles require the optional dependency: pip install .[secure]") from error
+    return AESGCM, hashes, PBKDF2HMAC
+
+
+def _derive_bundle_key(password: str, salt: bytes, iterations: int) -> bytes:
+    if not isinstance(password, str) or not password:
+        raise ValueError("A non-empty bundle password is required")
+    _, hashes, PBKDF2HMAC = _crypto_aesgcm()
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=iterations)
+    return kdf.derive(password.encode("utf-8"))
+
+
+def encrypt_bundle(input_path: Path, output_path: Path, password: str) -> dict[str, Any]:
+    """Encrypt a viewer directory or portable ZIP with PBKDF2 and AES-GCM."""
+
+    input_path = input_path.resolve()
+    output_path = output_path.resolve()
+    if output_path.exists():
+        raise FileExistsError(f"Encrypted bundle output already exists: {output_path}")
+    AESGCM, _, _ = _crypto_aesgcm()
+    salt = secrets.token_bytes(16)
+    nonce = secrets.token_bytes(12)
+    key = _derive_bundle_key(password, salt, _PBKDF2_ITERATIONS)
+    ciphertext = AESGCM(key).encrypt(nonce, _portable_bundle_bytes(input_path), _ENCRYPTED_AAD)
+    header = json.dumps(
+        {
+            "format": _ENCRYPTED_FORMAT,
+            "version": 1,
+            "cipher": "AES-256-GCM",
+            "kdf": "PBKDF2-HMAC-SHA256",
+            "iterations": _PBKDF2_ITERATIONS,
+            "salt": base64.b64encode(salt).decode("ascii"),
+            "nonce": base64.b64encode(nonce).decode("ascii"),
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("wb") as handle:
+        handle.write(_ENCRYPTED_MAGIC)
+        handle.write(struct.pack(">I", len(header)))
+        handle.write(header)
+        handle.write(ciphertext)
+    return {"output": output_path, "bytes": output_path.stat().st_size}
+
+
+def decrypt_bundle(input_path: Path, output_dir: Path, password: str) -> dict[str, Any]:
+    """Decrypt and safely extract an AES-GCM encrypted bundle."""
+
+    input_path = input_path.resolve()
+    if not input_path.is_file():
+        raise FileNotFoundError(f"Encrypted bundle file does not exist: {input_path}")
+    if input_path.stat().st_size > _BUNDLE_MAX_BYTES + 64 * 1024 * 1024:
+        raise ValueError("Encrypted bundle exceeds the supported size limit")
+    AESGCM, _, _ = _crypto_aesgcm()
+    data = input_path.read_bytes()
+    if not data.startswith(_ENCRYPTED_MAGIC) or len(data) < len(_ENCRYPTED_MAGIC) + 4:
+        raise ValueError("Not a CatchThat encrypted bundle")
+    header_start = len(_ENCRYPTED_MAGIC)
+    header_length = struct.unpack(">I", data[header_start : header_start + 4])[0]
+    if header_length > 64 * 1024:
+        raise ValueError("Encrypted bundle header is too large")
+    header_end = header_start + 4 + header_length
+    try:
+        header = json.loads(data[header_start + 4 : header_end].decode("utf-8"))
+        salt = base64.b64decode(header["salt"], validate=True)
+        nonce = base64.b64decode(header["nonce"], validate=True)
+        iterations = int(header["iterations"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError, binascii.Error) as error:
+        raise ValueError("Encrypted bundle header is invalid") from error
+    if header.get("format") != _ENCRYPTED_FORMAT or header.get("version") != 1 or header.get("cipher") != "AES-256-GCM":
+        raise ValueError("Unsupported encrypted bundle format")
+    if len(salt) != 16 or len(nonce) != 12 or not 100_000 <= iterations <= _MAX_PBKDF2_ITERATIONS:
+        raise ValueError("Encrypted bundle parameters are invalid")
+    key = _derive_bundle_key(password, salt, iterations)
+    try:
+        plaintext = AESGCM(key).decrypt(nonce, data[header_end:], _ENCRYPTED_AAD)
+    except Exception as error:
+        raise ValueError("Unable to decrypt bundle; the password may be wrong or the file may be corrupt") from error
+    return _extract_bundle_bytes(plaintext, output_dir)
 
 
 def _evidence_source_summary(metadata: dict[str, Any]) -> dict[str, Any]:

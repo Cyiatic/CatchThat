@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import unittest
+import zipfile
 from contextlib import redirect_stderr
 from copy import deepcopy
 from pathlib import Path
@@ -20,9 +21,13 @@ from catchthat.core import (  # noqa: E402
     build_catalog,
     build_archive,
     capture_session_status,
+    decrypt_bundle,
+    encrypt_bundle,
     export_evidence,
+    export_bundle,
     finalize_capture_session,
     import_transcript,
+    import_bundle,
     init_capture_session,
     load_json,
     merge_transcripts,
@@ -99,6 +104,50 @@ class ArchiveTests(unittest.TestCase):
             evidence["archive"]["message_count"] = 999
             evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
             self.assertTrue(any("summary mismatch" in error for error in verify_evidence(evidence_path)))
+
+    def test_portable_and_encrypted_bundles_round_trip(self) -> None:
+        try:
+            import cryptography  # noqa: F401
+        except ImportError:
+            self.skipTest("cryptography is not installed")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            viewer = root / "viewer"
+            self.assertEqual(build_archive(self.fixture, viewer), [])
+            bundle = root / "viewer.zip"
+            portable = export_bundle(viewer, bundle)
+            self.assertGreater(portable["bytes"], 0)
+            restored = root / "restored"
+            imported = import_bundle(bundle, restored)
+            self.assertTrue(imported["verified"])
+            self.assertEqual(verify_build(restored), [])
+
+            encrypted = root / "viewer.catchthat.enc"
+            encrypted_summary = encrypt_bundle(viewer, encrypted, "test passphrase")
+            self.assertGreater(encrypted_summary["bytes"], 0)
+            decrypted = root / "decrypted"
+            decrypted_summary = decrypt_bundle(encrypted, decrypted, "test passphrase")
+            self.assertTrue(decrypted_summary["verified"])
+            self.assertEqual(verify_build(decrypted), [])
+
+            encrypted_zip = root / "viewer-zip.catchthat.enc"
+            encrypt_bundle(bundle, encrypted_zip, "test passphrase")
+            decrypted_zip = root / "decrypted-zip"
+            decrypted_zip_summary = decrypt_bundle(encrypted_zip, decrypted_zip, "test passphrase")
+            self.assertTrue(decrypted_zip_summary["verified"])
+            self.assertTrue((decrypted_zip / "index.html").is_file())
+            with self.assertRaises(ValueError):
+                decrypt_bundle(encrypted, root / "wrong-password", "wrong passphrase")
+
+    def test_bundle_import_rejects_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "unsafe.zip"
+            with zipfile.ZipFile(bundle, "w") as archive:
+                archive.writestr("../escape.txt", "must not extract")
+            with self.assertRaises(ValueError):
+                import_bundle(bundle, root / "restored")
+            self.assertFalse((root / "escape.txt").exists())
 
     def test_safe_share_redaction_remaps_people_and_removes_private_refs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

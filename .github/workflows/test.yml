@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: "20"
       - name: Install package
-        run: python -m pip install --editable .
+        run: python -m pip install --editable ".[secure]"
       - name: Run unit tests
         run: python -m unittest discover -s tests -q
       - name: Compile Python sources
@@ -31,3 +31,5 @@ jobs:
         run: |
           python -m catchthat build fixtures/sample/archive.json --output "$RUNNER_TEMP/catchthat-view"
           python -m catchthat verify "$RUNNER_TEMP/catchthat-view"
+      - name: Validate public package boundary
+        run: python scripts/validate_public_package.py --root .

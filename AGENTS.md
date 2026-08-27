@@ -66,6 +66,11 @@ python -m catchthat capture-session status --session private-data\conversation.s
 python -m catchthat capture-session finalize --session private-data\conversation.session.json --output private-data\conversation.final.json
 python -m catchthat build-catalog --input private-data\conversation.json --output private-data\catalog
 python -m catchthat verify-catalog private-data\catalog
+python -m catchthat export-bundle --input private-data\conversation-view --output private-data\conversation.bundle.zip
+python -m catchthat import-bundle --input private-data\conversation.bundle.zip --output private-data\conversation-restored-view
+python -m catchthat encrypt-bundle --input private-data\conversation.bundle.zip --output private-data\conversation.bundle.catchthat.enc
+python -m catchthat decrypt-bundle --input private-data\conversation.bundle.catchthat.enc --output private-data\conversation-decrypted-view
+.\scripts\share_archive.ps1 -ArchivePath private-data\conversation.json -OutputPath private-data\conversation.safe.catchthat.enc -Encrypt
 python -m unittest discover -s tests -v
 ```
 
@@ -108,12 +113,30 @@ boundaries and an overlap-linked chain still govern coverage status.
 
 CatchThat includes the compatible subset of Concordance’s archive workflow:
 metadata-only evidence export/verification, safe-share redaction, a local
-multi-archive catalog, and a relative-path/hash capture-session ledger.
-Concordance’s remote media materialization, official platform data-package
-import, optional encryption dependency, Discord-specific migration, and
-remote telemetry are intentionally not ported. Snapchat capture remains
-visible-DOM-only, and adding Sentry or any network telemetry would violate the
-local-first/no-background-network boundary.
+multi-archive catalog, a relative-path/hash capture-session ledger, portable
+ZIP bundles, and optional password-protected AES-GCM bundles. Concordance’s
+remote media materialization, official platform data-package import,
+Discord-specific migration, and remote telemetry are intentionally not
+ported. Snapchat capture remains visible-DOM-only, and adding Sentry or any
+network telemetry would violate the local-first/no-background-network
+boundary. The secure bundle dependency is optional; raw archives remain local
+and must be redacted before a bundle is shared.
+
+## Public package boundary
+
+The repo-local skills-only Codex plugin is under `plugins/catchthat/`. It
+describes the workflow and safety boundary but does not provide an MCP server,
+credentials, account access, or an unattended browser connector. Run the
+source-only release script when preparing a distributable copy:
+
+```powershell
+.\scripts\package_release.ps1 -OutputPath dist\catchthat-release.zip
+```
+
+The release script allowlists source, documentation, tests, tools, the plugin,
+and the synthetic fixture, then validates the staging tree. It never copies
+`private-data/` or generated `output/` content. Public examples and fixtures
+must stay synthetic.
 
 ## Live smoke-test handoff
 

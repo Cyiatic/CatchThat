@@ -15,7 +15,7 @@ CatchThat was the only checkout changed.
 | Large bounded viewer lists | Already present | The static viewer limits rendered rows and keeps archive-wide search/deep links. |
 | Remote media materialization | Excluded | Snapchat’s boundary forbids remote media fetching; visible pixels may be materialized only by the foreground adapter. |
 | Official platform data-package import | Excluded | There is no Snapchat equivalent in scope, and it would not be visible-DOM capture. |
-| Optional encrypted bundle | Deferred | It would add a dependency and key-management surface; the current workflow keeps private data under access-controlled `private-data/`. |
+| Optional encrypted bundle | Implemented | `export-bundle` creates a portable ZIP; the optional `secure` extra adds password-protected PBKDF2-HMAC-SHA256/AES-256-GCM bundles. Raw archives still remain local and must be redacted before sharing. |
 | Sentry telemetry | Not applicable | Sentry CLI is not installed, and adding network telemetry would conflict with the offline/local-first boundary. |
 
 ## Security review

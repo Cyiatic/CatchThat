@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import sys
 from pathlib import Path
 
@@ -9,9 +10,13 @@ from .core import (
     build_catalog,
     build_archive,
     capture_session_status,
+    decrypt_bundle,
+    encrypt_bundle,
     export_evidence,
+    export_bundle,
     finalize_capture_session,
     import_transcript,
+    import_bundle,
     init_capture_session,
     load_json,
     merge_transcripts,
@@ -27,6 +32,16 @@ from .core import (
 
 def _path(value: str) -> Path:
     return Path(value).expanduser()
+
+
+def _password_from_args(args: argparse.Namespace) -> str:
+    if args.password_file:
+        password = args.password_file.read_text(encoding="utf-8").rstrip("\r\n")
+    else:
+        password = getpass.getpass("Bundle password: ")
+    if not password:
+        raise ValueError("A non-empty bundle password is required")
+    return password
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,6 +60,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify = subparsers.add_parser("verify", help="verify a generated viewer, archive, and local assets")
     verify.add_argument("input", type=_path)
+
+    bundle_export = subparsers.add_parser("export-bundle", help="export an archive or viewer directory as a portable ZIP")
+    bundle_export.add_argument("--input", required=True, type=_path)
+    bundle_export.add_argument("--output", required=True, type=_path)
+
+    bundle_import = subparsers.add_parser("import-bundle", help="safely extract a portable archive bundle")
+    bundle_import.add_argument("--input", required=True, type=_path)
+    bundle_import.add_argument("--output", required=True, type=_path)
+
+    bundle_encrypt = subparsers.add_parser("encrypt-bundle", help="encrypt a portable bundle with a password-protected AES-GCM envelope")
+    bundle_encrypt.add_argument("--input", required=True, type=_path)
+    bundle_encrypt.add_argument("--output", required=True, type=_path)
+    bundle_encrypt.add_argument("--password-file", type=_path, help="read the password from a private file; otherwise prompt securely")
+
+    bundle_decrypt = subparsers.add_parser("decrypt-bundle", help="decrypt and safely extract a password-protected bundle")
+    bundle_decrypt.add_argument("--input", required=True, type=_path)
+    bundle_decrypt.add_argument("--output", required=True, type=_path)
+    bundle_decrypt.add_argument("--password-file", type=_path, help="read the password from a private file; otherwise prompt securely")
 
     redact = subparsers.add_parser("redact", help="create a safe-share archive without private content or identities")
     redact.add_argument("--input", required=True, type=_path)
@@ -148,6 +181,33 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"ERROR: {error}", file=sys.stderr)
                 return 2
             print(f"Verified offline viewer: {args.input}")
+            return 0
+
+        if args.command == "export-bundle":
+            summary = export_bundle(args.input, args.output)
+            print(f"Exported bundle: {args.output}")
+            print(f"Files: {summary['files']}")
+            print(f"Bytes: {summary['bytes']}")
+            return 0
+
+        if args.command == "import-bundle":
+            summary = import_bundle(args.input, args.output)
+            print(f"Imported bundle: {args.output}")
+            print(f"Files: {summary['files']}")
+            print(f"Verified viewer: {bool(summary['verified'])}")
+            return 0
+
+        if args.command == "encrypt-bundle":
+            summary = encrypt_bundle(args.input, args.output, _password_from_args(args))
+            print(f"Encrypted bundle: {args.output}")
+            print(f"Bytes: {summary['bytes']}")
+            return 0
+
+        if args.command == "decrypt-bundle":
+            summary = decrypt_bundle(args.input, args.output, _password_from_args(args))
+            print(f"Decrypted bundle: {args.output}")
+            print(f"Files: {summary['files']}")
+            print(f"Verified viewer: {bool(summary['verified'])}")
             return 0
 
         if args.command == "redact":
@@ -296,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Messages: {summary['messages']}")
                 print(f"Coverage: {summary['coverage'].get('status', 'unverified')}")
                 return 0
-    except (OSError, ValueError, FileNotFoundError) as error:
+    except (OSError, RuntimeError, ValueError, FileNotFoundError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
     return 1
