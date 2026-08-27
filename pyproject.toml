@@ -6,6 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "catchthat"
 version = "0.2.0"
 description = "Private local-first Snapchat chat archives with an offline viewer"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Cyiatic" }]
 requires-python = ">=3.11"
 dependencies = []
 
@@ -14,6 +17,10 @@ secure = ["cryptography>=42"]
 
 [project.scripts]
 catchthat = "catchthat.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Cyiatic/catchthat"
+Repository = "https://github.com/Cyiatic/catchthat"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -31,5 +31,13 @@ jobs:
         run: |
           python -m catchthat build fixtures/sample/archive.json --output "$RUNNER_TEMP/catchthat-view"
           python -m catchthat verify "$RUNNER_TEMP/catchthat-view"
+          node --check "$RUNNER_TEMP/catchthat-view/app.js"
+      - name: Build wheel
+        run: python -m pip wheel . --no-deps --wheel-dir "$RUNNER_TEMP/catchthat-wheel"
       - name: Validate public package boundary
-        run: python scripts/validate_public_package.py --root .
+        shell: bash
+        run: |
+          public_root="$RUNNER_TEMP/catchthat-public-source"
+          mkdir -p "$public_root"
+          git archive --format=tar HEAD | tar -x -C "$public_root"
+          python "$public_root/scripts/validate_public_package.py" --root "$public_root"

@@ -18,7 +18,7 @@ $env:PYTHONPATH = Join-Path $releaseRoot "src"
 
 try {
     New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
-    foreach ($relative in @(".gitignore", "README.md", "PRODUCT.md", "DESIGN.md", "AGENTS.md", "security_best_practices_report.md", "pyproject.toml")) {
+    foreach ($relative in @(".gitignore", "README.md", "PRODUCT.md", "DESIGN.md", "AGENTS.md", "CHANGELOG.md", "LICENSE", "SECURITY.md", "security_best_practices_report.md", "pyproject.toml")) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $relative) -Destination (Join-Path $releaseRoot $relative)
     }
     foreach ($relative in @(".github", "assets", "docs", "src", "viewer", "tools", "fixtures", "plugins", "scripts", "tests")) {
@@ -30,6 +30,8 @@ try {
     & python -m catchthat build (Join-Path $releaseRoot "fixtures\sample\archive.json") --output $sampleOutput
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & python -m catchthat verify $sampleOutput
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    & python -m unittest discover -s (Join-Path $releaseRoot "tests") -q
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     Get-ChildItem -LiteralPath $releaseRoot -Recurse -Force -Directory |

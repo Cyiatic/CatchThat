@@ -149,6 +149,43 @@ class ArchiveTests(unittest.TestCase):
                 import_bundle(bundle, root / "restored")
             self.assertFalse((root / "escape.txt").exists())
 
+    def test_bundle_cli_commands_round_trip(self) -> None:
+        try:
+            import cryptography  # noqa: F401
+        except ImportError:
+            self.skipTest("cryptography is not installed")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            viewer = root / "viewer"
+            self.assertEqual(build_archive(self.fixture, viewer), [])
+            bundle = root / "viewer.zip"
+            self.assertEqual(cli_main(["export-bundle", "--input", str(viewer), "--output", str(bundle)]), 0)
+            restored = root / "restored"
+            self.assertEqual(cli_main(["import-bundle", "--input", str(bundle), "--output", str(restored)]), 0)
+            password = root / "password.txt"
+            password.write_text("synthetic CLI passphrase\n", encoding="utf-8")
+            encrypted = root / "viewer.enc"
+            self.assertEqual(
+                cli_main([
+                    "encrypt-bundle",
+                    "--input", str(bundle),
+                    "--output", str(encrypted),
+                    "--password-file", str(password),
+                ]),
+                0,
+            )
+            decrypted = root / "decrypted"
+            self.assertEqual(
+                cli_main([
+                    "decrypt-bundle",
+                    "--input", str(encrypted),
+                    "--output", str(decrypted),
+                    "--password-file", str(password),
+                ]),
+                0,
+            )
+            self.assertEqual(verify_build(decrypted), [])
+
     def test_safe_share_redaction_remaps_people_and_removes_private_refs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -133,10 +133,10 @@ source-only release script when preparing a distributable copy:
 .\scripts\package_release.ps1 -OutputPath dist\catchthat-release.zip
 ```
 
-The release script allowlists source, documentation, tests, tools, the plugin,
-and the synthetic fixture, then validates the staging tree. It never copies
-`private-data/` or generated `output/` content. Public examples and fixtures
-must stay synthetic.
+The release script allowlists source, licensing/release documentation, tests,
+tools, the plugin, the logo, and the synthetic fixture, then validates the
+staging tree. It never copies `private-data/` or generated `output/` content.
+Public examples and fixtures must stay synthetic.
 
 ## Live smoke-test handoff
 

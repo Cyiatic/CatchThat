@@ -53,7 +53,9 @@ synthetic fixture, then validates the staging tree. It never copies
 `private-data/` or generated `output/` content. This separation follows the
 [OpenAI plugin packaging model](https://developers.openai.com/plugins/build/plugins):
 the plugin is source-only and the local workflow remains explicit about what
-the user supplies and approves.
+the user supplies and approves. The public package is MIT-licensed; see
+[`LICENSE`](LICENSE), [`CHANGELOG.md`](CHANGELOG.md), and
+[`SECURITY.md`](SECURITY.md).
 
 ## Quick start with the synthetic fixture
 
