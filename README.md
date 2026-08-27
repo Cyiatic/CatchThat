@@ -1,5 +1,5 @@
 <h1 align="left">
-  <img src="assets/catchthat-logo.png" alt="" width="88" valign="middle">
+  <img src="assets/catchthat-logo.png" alt="" width="132" valign="middle">
   CatchThat
 </h1>
 
