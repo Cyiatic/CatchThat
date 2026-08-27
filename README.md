@@ -1,8 +1,7 @@
-<p align="center">
-  <img src="assets/catchthat-logo.png" alt="CatchThat ghost vacuum logo" width="240">
-</p>
-
-# CatchThat
+<h1 align="center">
+  <img src="assets/catchthat-logo.png" alt="" width="88" valign="middle">
+  CatchThat
+</h1>
 
 CatchThat is a private/local-first Snapchat chat archiver. It turns a supplied
 transcript or a foreground, user-triggered visible-DOM capture of the current
@@ -321,7 +320,7 @@ read as visible pixels, the adapter supplies a bounded PNG data URL and
 and cross-origin or otherwise unreadable media remain explicit placeholders or
 references. The same rule applies to participant avatars under
 `assets/avatars/` with `avatar_provenance`; otherwise `avatar_ref` remains
-reference-only. Snapchat avatar images can be layout-only `<img>` elements
+reference-only. Snapchat avatar images can be layout-only image elements
 without alt text or semantic class names, so the foreground adapter also
 recognizes small square images only when they are in the visible author context
 or a named header/list item. Participant `visible_profile` fields contain only metadata

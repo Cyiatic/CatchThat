@@ -19,8 +19,8 @@ secure = ["cryptography>=42"]
 catchthat = "catchthat.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Cyiatic/catchthat"
-Repository = "https://github.com/Cyiatic/catchthat"
+Homepage = "https://github.com/Cyiatic/CatchThat"
+Repository = "https://github.com/Cyiatic/CatchThat"
 
 [tool.setuptools.packages.find]
 where = ["src"]
